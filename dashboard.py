@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from flask import Flask, render_template, request, redirect
 from pathlib import Path
-import yaml, db, time
+import yaml, db, time, threading, radar
 
 ROOT = Path(__file__).parent
 app = Flask(__name__)
@@ -9,6 +9,17 @@ app = Flask(__name__)
 TABS = [("new", "📥 Inbox"), ("applied", "✅ Applied"),
         ("interviewing", "🎯 Interviewing"), ("dismissed", "🗑️ Dismissed")]
 VALID = {"new", "applied", "interviewing", "dismissed"}
+
+# in-memory state for the manual "Run Radar Now" button
+_scan = {"running": False, "found": None}
+
+def _run_scan():
+    try:
+        _scan["found"] = len(radar.main())
+    except Exception as e:
+        _scan["found"] = f"error: {e}"
+    finally:
+        _scan["running"] = False
 
 def cfg():
     with open(ROOT / "config.yaml") as f:
@@ -43,8 +54,13 @@ def index():
         j["claude_prompt"] = claude_prompt(j)
         j["matched_list"] = [m for m in (j.get("matched") or "").split(",") if m]
         j["age"] = age_str(j.get("posted"))
+    scanning = _scan["running"]
+    found = _scan["found"]
+    if not scanning and found is not None:
+        _scan["found"] = None   # consume so the banner shows once
     return render_template("dashboard.html", jobs=jobs, status=status,
-                           tabs=TABS, counts=db.counts())
+                           tabs=TABS, counts=db.counts(),
+                           scanning=scanning, scan_found=found)
 
 @app.route("/action", methods=["POST"])
 def action():
@@ -52,6 +68,19 @@ def action():
     if new_status in VALID:
         db.set_status(request.form["id"], new_status)
     return redirect("/?status=" + request.form.get("back", "new"))
+
+@app.route("/run", methods=["POST"])
+def run_scan():
+    if not _scan["running"]:
+        _scan["running"] = True
+        _scan["found"] = None
+        threading.Thread(target=_run_scan, daemon=True).start()
+    return redirect("/?status=" + request.form.get("back", "new"))
+
+@app.route("/clear", methods=["POST"])
+def clear():
+    db.clear_all()
+    return redirect("/?status=new")
 
 if __name__ == "__main__":
     db.init()

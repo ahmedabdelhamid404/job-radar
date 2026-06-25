@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import logging
+import logging, html, time
 from pathlib import Path
 import yaml
 import db, sources, score, alerts
@@ -83,20 +83,42 @@ def process(cfg, raw):
     new.sort(key=lambda x: (x["score"], x.get("posted") or 0), reverse=True)
     return new
 
+def _age(posted):
+    if not posted:
+        return ""
+    d = time.time() - posted
+    if d < 3600:
+        return f"{int(d // 60)}m"
+    if d < 86400:
+        return f"{int(d // 3600)}h"
+    return f"{int(d // 86400)}d"
+
 def notify(cfg, new):
     port = cfg["dashboard"]["port"]
-    top = new[0]
-    head = f"🔔 {len(new)} new Angular match{'es' if len(new) != 1 else ''}"
-    msg = (f"{head}\n"
-           f"Top: {top['title']} @ {top['company'] or '—'} "
-           f"({top['score']}% · {top['cv']} CV · {top['market']})\n"
-           f"Dashboard: http://localhost:{port}")
-    ok, info = alerts.send_telegram(cfg, msg)
+    n = len(new)
+    head_plain = f"🔔 {n} new Angular match{'es' if n != 1 else ''}"
+    cap = 20
+    lines = [f"<b>{head_plain}</b> · cleanest &amp; newest first", ""]
+    for i, j in enumerate(new[:cap], 1):
+        title = html.escape(j["title"] or "")
+        meta = f"{html.escape(j['company'] or '—')} · {j['score']}% · {html.escape(j['cv'])} CV · {html.escape(j['market'])}"
+        age = _age(j.get("posted"))
+        if age:
+            meta += f" · 🕒 {age}"
+        url = j.get("url") or ""
+        head = f'<a href="{html.escape(url, quote=True)}"><b>{title}</b></a>' if url else f"<b>{title}</b>"
+        lines.append(f"{i}. {head}")
+        lines.append(f"    {meta}")
+    if n > cap:
+        lines.append(f"\n… +{n - cap} more in the dashboard")
+    lines.append(f"\n📋 Open dashboard: http://localhost:{port}")
+    ok, info = alerts.send_telegram(cfg, "\n".join(lines))
     log.info("telegram sent=%s info=%s", ok, info)
-    alerts.send_desktop(cfg, head, f"{top['title']} @ {top['company']}")
+    top = new[0]
+    alerts.send_desktop(cfg, head_plain, f"{top['title']} @ {top['company']}")
     body = "<br>".join(f"{j['score']}% — <b>{j['title']}</b> @ {j['company']} "
-                       f"[{j['cv']}] <a href='{j['url']}'>open</a>" for j in new[:25])
-    alerts.send_email(cfg, head, body)
+                       f"[{j['cv']}] <a href='{j['url']}'>Apply</a>" for j in new[:25])
+    alerts.send_email(cfg, head_plain, body)
 
 def main():
     cfg = load_cfg()

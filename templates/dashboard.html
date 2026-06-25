@@ -11,15 +11,26 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+{% if scanning %}<meta http-equiv="refresh" content="5">{% endif %}
 <title>Job Radar — {{ dict(tabs)[status] }}</title>
 <style>
   :root{--navy:#15324f;--ink:#1a1a1a;--muted:#667;--rule:#dde3ea;--bg:#eef1f5;
         --green:#1f8a4c;--amber:#c47d12;--red:#b23b3b;}
   *{box-sizing:border-box;}
   body{margin:0;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);}
-  header{background:var(--navy);color:#fff;padding:14px 22px;}
+  header{background:var(--navy);color:#fff;padding:14px 22px;display:flex;
+         justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;}
   header h1{margin:0;font-size:18px;letter-spacing:.5px;}
   header .sub{font-size:12px;opacity:.8;margin-top:2px;}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;}
+  .controls button{font-size:13px;font-weight:700;border-radius:8px;padding:9px 14px;
+        border:1px solid transparent;cursor:pointer;}
+  .controls .run{background:#2ea36a;color:#fff;}
+  .controls .run:disabled{opacity:.6;cursor:default;}
+  .controls .wipe{background:transparent;color:#fff;border-color:rgba(255,255,255,.45);}
+  .banner{margin:12px 22px 0;padding:9px 14px;border-radius:8px;font-size:13px;font-weight:600;max-width:920px;}
+  .banner.scan{background:#fff7e6;color:#8a5a00;border:1px solid #f0d9a8;}
+  .banner.done{background:#e9f7ef;color:#1f8a4c;border:1px solid #bfe0cb;}
   .tabs{display:flex;gap:6px;padding:12px 22px 0;flex-wrap:wrap;}
   .tabs a{text-decoration:none;color:var(--navy);background:#fff;border:1px solid var(--rule);
           padding:7px 13px;border-radius:8px 8px 0 0;font-size:13px;font-weight:600;}
@@ -49,9 +60,27 @@
 </head>
 <body>
   <header>
-    <h1>📡 Job Radar</h1>
-    <div class="sub">Angular / Front-End matches · click an action to file a job · 📋 copies a ready prompt for Claude</div>
+    <div>
+      <h1>📡 Job Radar</h1>
+      <div class="sub">Angular / Front-End matches · click an action to file a job · 📋 copies a ready prompt for Claude</div>
+    </div>
+    <div class="controls">
+      <form method="post" action="/run" style="display:inline">
+        <input type="hidden" name="back" value="{{ status }}">
+        <button class="run" type="submit"{{ ' disabled' if scanning }}>{{ '⏳ Scanning…' if scanning else '🔄 Run Radar Now' }}</button>
+      </form>
+      <form method="post" action="/clear" style="display:inline"
+            onsubmit="return confirm('Delete ALL jobs from every tab (Inbox, Applied, Interviewing, Dismissed)? This cannot be undone.');">
+        <button class="wipe" type="submit">🗑 Clear All</button>
+      </form>
+    </div>
   </header>
+
+  {% if scanning %}
+    <div class="banner scan">⏳ Radar is scanning all sources… this page refreshes automatically when it's done.</div>
+  {% elif scan_found is not none %}
+    <div class="banner done">✅ Scan complete — {{ scan_found }}{% if scan_found is number %} new match{{ 'es' if scan_found != 1 else '' }} in 📥 Inbox{% endif %}.</div>
+  {% endif %}
 
   <div class="tabs">
     {% for key, label in tabs %}

@@ -52,3 +52,7 @@ def counts():
     with conn() as c:
         rows = c.execute("SELECT status, COUNT(*) n FROM jobs GROUP BY status").fetchall()
     return {r["status"]: r["n"] for r in rows}
+
+def clear_all():
+    with conn() as c:
+        c.execute("DELETE FROM jobs")
