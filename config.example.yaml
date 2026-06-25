@@ -1,0 +1,64 @@
+# Job Radar config — copy to config.yaml and fill in. config.yaml is gitignored (never committed).
+
+profile:
+  must_have_any: [angular]          # a job must mention at least one of these (or "frontend" in the title)
+  exclude_terms: [intern, internship, trainee, graduate, apprentice]   # drop if these appear in the TITLE
+  skills:                           # used to score fit + build the match pitch
+    - Angular
+    - TypeScript
+    - RxJS
+    - NgRx
+    - Signals
+    - Signal Store
+    - Nx
+    - Micro Frontend
+    - Micro-Frontend
+    - SSR
+    - Hydration
+    - SCSS
+    - Sass
+    - Tailwind
+    - Bootstrap
+    - Angular Material
+    - CDK
+    - Reactive Forms
+    - REST
+    - JavaScript
+    - HTML
+    - CSS
+    - esbuild
+
+markets:            # which regions to query on keyed aggregators (Jooble/Adzuna)
+  remote_intl: true
+  gulf: true
+  egypt: true
+
+work_style:         # keep only jobs that match these
+  remote: true
+  hybrid_egypt: true   # hybrid kept ONLY if the job is in Egypt (no relocation)
+  onsite: false
+  relocation: false
+
+search:
+  queries: [angular, "angular developer", "frontend engineer", "front end developer", "senior frontend"]
+
+keys:               # all optional — empty keys just skip that source
+  jooble: ""              # https://jooble.org/api/about   (unlocks Gulf + Egypt)
+  adzuna_app_id: ""       # https://developer.adzuna.com
+  adzuna_app_key: ""
+  careerjet_affid: ""
+
+alerts:
+  telegram: true
+  telegram_token: ""      # from @BotFather
+  telegram_chat_id: ""    # your numeric chat id
+  desktop_popup: false    # set true to also get a desktop notification
+  email: false
+  email_to: ""
+  smtp_host: ""
+  smtp_port: 587
+  smtp_user: ""
+  smtp_pass: ""
+
+dashboard:
+  port: 5000

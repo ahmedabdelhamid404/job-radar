@@ -1,0 +1,104 @@
+{%- macro btn(id, status, label, cls, back) -%}
+<form method="post" action="/action" style="display:inline">
+  <input type="hidden" name="id" value="{{ id }}">
+  <input type="hidden" name="status" value="{{ status }}">
+  <input type="hidden" name="back" value="{{ back }}">
+  <button class="{{ cls }}" type="submit">{{ label }}</button>
+</form>
+{%- endmacro -%}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Radar — {{ dict(tabs)[status] }}</title>
+<style>
+  :root{--navy:#15324f;--ink:#1a1a1a;--muted:#667;--rule:#dde3ea;--bg:#eef1f5;
+        --green:#1f8a4c;--amber:#c47d12;--red:#b23b3b;}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);}
+  header{background:var(--navy);color:#fff;padding:14px 22px;}
+  header h1{margin:0;font-size:18px;letter-spacing:.5px;}
+  header .sub{font-size:12px;opacity:.8;margin-top:2px;}
+  .tabs{display:flex;gap:6px;padding:12px 22px 0;flex-wrap:wrap;}
+  .tabs a{text-decoration:none;color:var(--navy);background:#fff;border:1px solid var(--rule);
+          padding:7px 13px;border-radius:8px 8px 0 0;font-size:13px;font-weight:600;}
+  .tabs a.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+  .tabs a .n{opacity:.7;font-weight:400;}
+  .wrap{padding:16px 22px 40px;max-width:920px;}
+  .empty{color:var(--muted);font-size:14px;padding:30px 0;}
+  .card{background:#fff;border:1px solid var(--rule);border-radius:10px;padding:13px 15px;margin-bottom:11px;
+        display:grid;grid-template-columns:54px 1fr;gap:13px;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+  .score{font-weight:700;font-size:17px;color:#fff;border-radius:8px;height:42px;width:54px;
+         display:flex;align-items:center;justify-content:center;}
+  .s-hi{background:var(--green);} .s-mid{background:var(--amber);} .s-lo{background:#8a93a0;}
+  .title{font-size:15px;font-weight:700;color:var(--navy);margin:0 0 2px;}
+  .co{font-size:13px;color:var(--ink);margin-bottom:5px;}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;}
+  .tag{font-size:11px;background:#eef2f7;color:#445;border-radius:5px;padding:2px 7px;}
+  .tag.cv{background:#e7eef7;color:var(--navy);font-weight:600;}
+  .pitch{font-size:12.5px;color:var(--muted);margin-bottom:9px;}
+  .actions{display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
+  .actions a,.actions button{font-size:12.5px;font-weight:600;border-radius:7px;padding:6px 11px;
+        border:1px solid var(--rule);cursor:pointer;background:#fff;color:var(--ink);text-decoration:none;}
+  .apply{background:var(--navy)!important;color:#fff!important;border-color:var(--navy)!important;}
+  .ok{color:var(--green);border-color:#bfe0cb;} .iv{color:var(--amber);border-color:#ecd9b3;}
+  .rm{color:var(--red);border-color:#e7c2c2;} .copy{color:var(--navy);border-color:#c7d4e3;}
+  .copy.copied{background:var(--green);color:#fff;border-color:var(--green);}
+</style>
+</head>
+<body>
+  <header>
+    <h1>📡 Job Radar</h1>
+    <div class="sub">Angular / Front-End matches · click an action to file a job · 📋 copies a ready prompt for Claude</div>
+  </header>
+
+  <div class="tabs">
+    {% for key, label in tabs %}
+      <a class="{{ 'active' if key==status }}" href="/?status={{ key }}">{{ label }} <span class="n">({{ counts.get(key, 0) }})</span></a>
+    {% endfor %}
+  </div>
+
+  <div class="wrap">
+    {% if not jobs %}
+      <div class="empty">Nothing here yet. New matches land in 📥 Inbox after the next radar run.</div>
+    {% endif %}
+
+    {% for j in jobs %}
+    <div class="card">
+      <div class="score {{ 's-hi' if j.score>=55 else ('s-mid' if j.score>=35 else 's-lo') }}">{{ j.score }}</div>
+      <div>
+        <p class="title">{{ j.title }}</p>
+        <div class="co">{{ j.company or '—' }}{% if j.location %} · {{ j.location }}{% endif %}</div>
+        <div class="tags">
+          <span class="tag cv">{{ j.cv }} CV</span>
+          {% if j.remote %}<span class="tag">{{ j.remote }}</span>{% endif %}
+          <span class="tag">{{ j.market }}</span>
+          <span class="tag">{{ j.source }}</span>
+        </div>
+        <div class="pitch">{{ j.pitch }}</div>
+        <div class="actions">
+          {% if j.url %}<a class="apply" href="{{ j.url }}" target="_blank" rel="noopener">Apply ↗</a>{% endif %}
+          <button class="copy" onclick="cp(this)">📋 Copy for Claude</button>
+          <pre style="display:none">{{ j.claude_prompt }}</pre>
+          {% if status != 'applied' %}{{ btn(j.id, 'applied', '✅ Applied', 'ok', status) }}{% endif %}
+          {% if status != 'interviewing' %}{{ btn(j.id, 'interviewing', '🎯 Interviewing', 'iv', status) }}{% endif %}
+          {% if status != 'new' %}{{ btn(j.id, 'new', '↩ Inbox', '', status) }}{% endif %}
+          {% if status != 'dismissed' %}{{ btn(j.id, 'dismissed', '🗑 Dismiss', 'rm', status) }}{% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+<script>
+function cp(b){
+  const t = b.parentElement.querySelector('pre').textContent;
+  navigator.clipboard.writeText(t).then(()=>{
+    b.classList.add('copied'); const o=b.textContent; b.textContent='✓ Copied — paste to Claude';
+    setTimeout(()=>{b.classList.remove('copied'); b.textContent=o;}, 1800);
+  });
+}
+</script>
+</body>
+</html>
