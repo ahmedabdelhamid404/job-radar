@@ -66,6 +66,8 @@ def process(cfg, raw):
             seen.add(j["id"])
             if not score.relevant(j, cfg):
                 continue
+            if not score.fresh(j, cfg):
+                continue
             if not score.passes_workstyle(j, cfg):
                 continue
             if db.exists(c, j["id"]):
@@ -78,7 +80,7 @@ def process(cfg, raw):
                   "pitch": score.pitch(j, matched, cv)}
             db.insert_job(c, j2)
             new.append(j2)
-    new.sort(key=lambda x: x["score"], reverse=True)
+    new.sort(key=lambda x: (x["score"], x.get("posted") or 0), reverse=True)
     return new
 
 def notify(cfg, new):

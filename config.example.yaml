@@ -3,6 +3,7 @@
 profile:
   must_have_any: [angular]          # a job must mention at least one of these (or "frontend" in the title)
   exclude_terms: [intern, internship, trainee, graduate, apprentice]   # drop if these appear in the TITLE
+  exclude_stacks: [".net", "asp.net", "dotnet", "full stack", "fullstack", "full-stack", "backend", "back end", "back-end"]  # backend-primary / full-stack roles (Angular not the main job)
   skills:                           # used to score fit + build the match pitch
     - Angular
     - TypeScript
@@ -41,6 +42,7 @@ work_style:         # keep only jobs that match these
 
 search:
   queries: [angular, "angular developer", "frontend engineer", "front end developer", "senior frontend"]
+  max_age_days: 7          # only ingest jobs posted within this many days
 
 keys:               # all optional — empty keys just skip that source
   jooble: ""              # https://jooble.org/api/about   (unlocks Gulf + Egypt)

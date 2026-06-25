@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
     title TEXT, company TEXT, location TEXT, url TEXT,
     source TEXT, market TEXT, remote TEXT,
-    score INTEGER, cv TEXT, pitch TEXT, matched TEXT,
+    score INTEGER, cv TEXT, pitch TEXT, matched TEXT, posted REAL,
     status TEXT DEFAULT 'new',
     first_seen REAL, last_seen REAL
 );
@@ -30,11 +30,11 @@ def insert_job(c, j):
     now = time.time()
     c.execute(
         """INSERT OR IGNORE INTO jobs
-           (id,title,company,location,url,source,market,remote,score,cv,pitch,matched,status,first_seen,last_seen)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,'new',?,?)""",
+           (id,title,company,location,url,source,market,remote,score,cv,pitch,matched,posted,status,first_seen,last_seen)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'new',?,?)""",
         (j["id"], j["title"], j["company"], j["location"], j["url"], j["source"],
          j["market"], j["remote"], j["score"], j["cv"], j["pitch"],
-         ",".join(j.get("matched", [])), now, now),
+         ",".join(j.get("matched", [])), j.get("posted"), now, now),
     )
 
 def set_status(job_id, status):
@@ -44,7 +44,7 @@ def set_status(job_id, status):
 def jobs_by_status(status):
     with conn() as c:
         rows = c.execute(
-            "SELECT * FROM jobs WHERE status=? ORDER BY score DESC, first_seen DESC", (status,)
+            "SELECT * FROM jobs WHERE status=? ORDER BY score DESC, posted DESC, first_seen DESC", (status,)
         ).fetchall()
     return [dict(r) for r in rows]
 

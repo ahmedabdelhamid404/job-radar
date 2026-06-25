@@ -1,3 +1,5 @@
+import re, time
+
 GULF = ["uae", "u.a.e", "united arab", "dubai", "abu dhabi", "saudi", "ksa", "riyadh",
         "jeddah", "qatar", "doha", "kuwait", "bahrain", "oman", "gulf", "gcc"]
 EGYPT = ["egypt", "cairo", "giza", "alexandria", "obour", "october", "مصر", "القاهرة"]
@@ -6,6 +8,9 @@ HYBRID_WORDS = ["hybrid", "هجين"]
 SENIOR = ["senior", "lead", "principal", "staff", "sr."]
 JUNIOR = ["junior", "intern", "trainee", "graduate", "apprentice"]
 FE = ["frontend", "front-end", "front end"]
+JAVA_RE = re.compile(r"\bjava\b", re.I)   # whole word — never matches "javascript"
+OTHER_STACK = ["react", "vue", "svelte", "node", "nodejs", "node.js", "next.js", "nextjs",
+               "nuxt", "python", "php", "ruby", "golang", "django", "rails", ".net", "java"]
 
 def text_of(j):
     return f"{j['title']} {j['location']} {' '.join(j.get('tags') or [])} {j['description']}".lower()
@@ -34,15 +39,34 @@ def passes_workstyle(j, cfg):
         return True
     return False
 
+def is_backend_primary(title, cfg):
+    t = title.lower()
+    if any(s in t for s in cfg["profile"].get("exclude_stacks", [])):
+        return True
+    return bool(JAVA_RE.search(t))
+
 def relevant(j, cfg):
     title = j["title"].lower()
     tags = " ".join(j.get("tags") or []).lower()
+    desc = (j.get("description") or "").lower()
     p = cfg["profile"]
     if any(x in title for x in p.get("exclude_terms", [])):
         return False
+    if is_backend_primary(j["title"], cfg):
+        return False
     must = p.get("must_have_any", ["angular"])
-    return (any(m in title or m in tags for m in must)
-            or any(f in title for f in FE))
+    if any(m in title or m in tags for m in must):
+        return True
+    if any(m in desc for m in must) and any(f in title for f in FE):
+        return True
+    return False
+
+def fresh(j, cfg):
+    posted = j.get("posted")
+    if posted is None:
+        return True
+    max_age = cfg.get("search", {}).get("max_age_days", 2)
+    return posted >= time.time() - max_age * 86400
 
 def score(j, cfg):
     t = text_of(j)
@@ -57,6 +81,8 @@ def score(j, cfg):
         s += 25
     elif "angular" in t:
         s += 10
+    if "angular" in title and not any(o in title for o in OTHER_STACK):
+        s += 20   # clean Angular title, no other stack mixed in
     if any(f in title for f in FE):
         s += 12
     if any(sr in title for sr in SENIOR):

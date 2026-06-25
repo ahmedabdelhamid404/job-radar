@@ -75,6 +75,7 @@
           {% if j.remote %}<span class="tag">{{ j.remote }}</span>{% endif %}
           <span class="tag">{{ j.market }}</span>
           <span class="tag">{{ j.source }}</span>
+          {% if j.age %}<span class="tag">🕒 {{ j.age }}</span>{% endif %}
         </div>
         <div class="pitch">{{ j.pitch }}</div>
         <div class="actions">
