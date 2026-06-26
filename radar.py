@@ -143,7 +143,8 @@ def process(cfg, raw):
             remote = "remote" if score.is_remote(j) else ("hybrid" if score.is_hybrid(j) else "")
             j2 = {**j, "score": s, "cv": cv, "matched": matched,
                   "market": score.market_of(j), "remote": remote,
-                  "pitch": score.pitch(j, matched, cv, score.TIER_LABEL.get(tr, ""))}
+                  "pitch": score.pitch(j, matched, cv, score.TIER_LABEL.get(tr, ""),
+                                       score.timezone_fit(j)[1])}
             db.insert_job(c, j2)
             new.append(j2)
     new.sort(key=lambda x: (x["score"], x.get("posted") or 0), reverse=True)

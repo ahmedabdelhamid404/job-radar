@@ -23,6 +23,30 @@ TIER_LABEL = {"A": "⭐ Clean Angular", "B": "Angular-led", "C": "Angular (mixed
 DEPTH = ["rxjs", "ngrx", "signal", "nx ", "micro frontend", "micro-frontend", "ssr",
          "hydration", "angular material", " cdk", "esbuild", "standalone"]
 
+# ---- timezone / work-life-balance (Cairo UTC+3) — ranking only, never excludes ----
+TZ_FRIENDLY_DESC = ["async", "asynchronous", "work anywhere", "work from anywhere",
+                    "anywhere in the world", "any time zone", "any timezone", "no overlap",
+                    "flexible hours", "flexible schedule", "results-only", "results only",
+                    "your own schedule", "fully flexible", "worldwide", "anywhere"]
+TZ_FAR_DESC = ["pacific time", "pacific standard", "pacific timezone", "eastern time",
+               "eastern standard", "eastern timezone", "central time", "us hours",
+               "u.s. hours", "us business hours", "american business hours", "us-based hours",
+               "overlap with the us", "overlap with us team", "overlap with our us",
+               "overlap with us", "overlap with pst", "overlap with est", "core us hours",
+               "work us hours", "us pacific", "us eastern", "us central", "us time", "u.s. time"]
+TZ_ABBR_RE = re.compile(r"\b(pst|pdt|est|edt|cst|cdt|mst|mdt)\b", re.I)
+TZ_FRIENDLY_LOC = ["egypt", "cairo", "giza", "alexandria", "uae", "dubai", "abu dhabi",
+                   "saudi", "riyadh", "jeddah", "qatar", "doha", "kuwait", "bahrain", "oman",
+                   "gulf", "gcc", "mena", "europe", "european", "emea", "uk", "united kingdom",
+                   "england", "london", "ireland", "germany", "berlin", "france", "paris",
+                   "spain", "madrid", "netherlands", "amsterdam", "portugal", "lisbon",
+                   "poland", "africa"]
+US_STATES = {"al","ak","az","ar","ca","co","ct","de","fl","ga","hi","id","il","in","ia",
+             "ks","ky","la","me","md","ma","mi","mn","ms","mo","mt","ne","nv","nh","nj","nm",
+             "ny","nc","nd","oh","ok","or","pa","ri","sc","sd","tn","tx","ut","vt","va","wa",
+             "wv","wi","wy","dc"}
+US_WEST = {"ca","wa","or","nv","az","ut","id","mt","wy","co","nm","hi","ak"}
+
 def text_of(j):
     return f"{j['title']} {j['location']} {' '.join(j.get('tags') or [])} {j['description']}".lower()
 
@@ -96,6 +120,28 @@ def fresh(j, cfg):
     max_age = cfg.get("search", {}).get("max_age_days", 2)
     return posted >= time.time() - max_age * 86400
 
+def timezone_fit(j):
+    """(delta, label) for work-life-balance vs Cairo (UTC+3). Ranking only — never excludes.
+    Description requirements win; location is the fallback signal."""
+    loc = (j["location"] or "").lower()
+    desc = (j.get("description") or "").lower()
+    if any(p in (loc + " " + desc) for p in TZ_FRIENDLY_DESC):
+        return 12, "🌍 async/any-tz"
+    if any(p in desc for p in TZ_FAR_DESC):
+        return -15, "🌙 US-hours req"
+    m = re.search(r",\s*([a-z]{2})\b", loc)          # "City, CA" style suffix
+    st = m.group(1) if m else ""
+    if st in US_WEST or any(w in loc for w in ["pacific", "san francisco", "los angeles", "seattle"]):
+        return -15, "🌙 US-West"
+    if (st in US_STATES or re.search(r"\b(us|usa)\b", loc)
+            or any(w in loc for w in ["u.s", "united states", "america", "canada", "brazil", "mexico"])):
+        return -8, "🌆 US/Americas"
+    if any(f in loc for f in TZ_FRIENDLY_LOC):
+        return 10, "✅ your tz"
+    if TZ_ABBR_RE.search(desc):
+        return -6, "🌙 US-tz?"
+    return 0, ""
+
 def score(j, cfg):
     t = text_of(j)
     title = j["title"].lower()
@@ -108,6 +154,7 @@ def score(j, cfg):
     tr = tier(j)
     s += TIER_BONUS[tr]                              # Angular-primary dominates the ranking
     s += 3 * min(sum(1 for d in DEPTH if d in t), 5) # ecosystem depth = fits the CV (capped)
+    s += timezone_fit(j)[0]                          # work-life-balance vs Cairo timezone
     if any(sr in title for sr in SENIOR):
         s += 12
     elif "mid" in title:
@@ -125,7 +172,8 @@ def pick_cv(j):
 def market_of(j):
     return region(j) or "remote/intl"
 
-def pitch(j, matched, cv, tier_label=""):
+def pitch(j, matched, cv, tier_label="", tz_label=""):
     top = ", ".join(matched[:5]) if matched else "your Angular / front-end stack"
-    lead = f"{tier_label} · " if tier_label else ""
+    bits = [b for b in (tier_label, tz_label) if b]
+    lead = (" · ".join(bits) + " · ") if bits else ""
     return f"{lead}Matches {top}. Recommended CV: {cv}."

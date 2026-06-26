@@ -68,6 +68,19 @@ DROP = [
     J("Junior Angular Developer"),
 ]
 
+# ---- timezone ranking: same Angular role, differing only by location / required hours ----
+TZ = [
+    J("Angular Developer", loc="Remote - Cairo, Egypt"),
+    J("Angular Developer", loc="Remote - Dubai, UAE"),
+    J("Angular Developer", loc="Remote - London, UK"),
+    J("Angular Developer", loc="Remote - Europe"),
+    J("Angular Developer", desc="fully async, work anywhere in the world", loc="Remote - US"),
+    J("Angular Developer", loc="Remote", desc="standard remote role, no timezone stated"),
+    J("Angular Developer", loc="New York, NY"),
+    J("Angular Developer", loc="San Francisco, CA"),
+    J("Angular Developer", desc="must overlap with US Pacific (PST) hours", loc="Remote - US"),
+]
+
 def show(label, jobs):
     print(f"\n{'='*72}\n  {label}\n{'='*72}")
     for j in jobs:
@@ -78,9 +91,20 @@ def show(label, jobs):
         else:
             print(f"  ❌ DROP        {j['title']}")
 
+def show_tz():
+    print(f"\n{'='*72}\n  TIMEZONE RANKING (same Angular role — work-life-balance vs Cairo)\n{'='*72}")
+    rows = []
+    for j in TZ:
+        s, _, _ = score.score(j, cfg)
+        _, label = score.timezone_fit(j)
+        rows.append((s, label or "—", j["location"], j.get("description", "")[:34]))
+    for s, label, loc, d in sorted(rows, reverse=True):
+        print(f"  {s:>3}  {label:<16} {loc:<26} {d}")
+
 if __name__ == "__main__":
     show("SHOULD SELECT (25)", SELECT)
     show("SHOULD DROP (25)", DROP)
+    show_tz()
     bad_keep = sum(1 for j in DROP if score.relevant(j, cfg))
     bad_drop = sum(1 for j in SELECT if not score.relevant(j, cfg))
     print(f"\nSummary: {len(SELECT)-bad_drop}/{len(SELECT)} kept correctly, "
