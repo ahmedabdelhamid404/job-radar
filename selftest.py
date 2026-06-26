@@ -82,39 +82,85 @@ TZ = [
 ]
 
 # ---- LinkedIn hiring posts (loc = poster headline) ----
+# KEEP = genuine Angular/front-end hiring posts. Trusted Arabic/Egyptian/Gulf channel stays
+# lenient; English posts (any region) must name an actual front-end/Angular ROLE.
 POSTS_KEEP = [
     J("مطلوب مطور Angular", loc="HR Specialist | Hiring in Egypt",
       desc="شركة بالقاهرة تعلن عن حاجتها لمطور Angular، للتقديم برجاء إرسال السيرة الذاتية على hr@company.com"),
     J("We're hiring a Senior Angular Developer", loc="Talent Acquisition at Sword Egypt",
       desc="Cairo-based, hybrid. Strong Angular & RxJS. Send your CV to jobs@sword.eg"),
     J("Exciting opportunity!", loc="Technical Recruiter",
-      desc="We are thrilled to announce we're hiring an Angular Engineer. Remote, async, work anywhere. Apply now!"),
+      desc="We are thrilled to announce we're hiring an Angular Developer. Remote, async, work anywhere. Apply now!"),
     J("Hiring Angular dev", loc="Founder at a Dubai startup",
-      desc="نوظف Angular developer للعمل من دبي. أرسل CV"),
-    J("🚀 We're Hiring!", loc="US IT Recruiter",
-      desc="Multiple C2C roles: Java, .NET, React, Python, Angular, DevOps. Send CV"),  # blast → low score
+      desc="نوظف مطور Angular للعمل من دبي. أرسل CV"),
+    J("We're hiring a Frontend Engineer", loc="Engineering Manager",
+      desc="Remote-friendly. Stack: Angular, RxJS, Angular Material, NgRx. Send your CV."),
 ]
+# DROP = the 10 real posts that leaked into Ahmed's Posts tab (reconstructed from their
+# LinkedIn URL slugs + poster headlines) + classic tutorial/opinion noise.
 POSTS_DROP = [
+    # --- the 10 real leaks ---
+    J("Most Software Engineering jobs are flooded with candidates.",  # career-coach commentary, not a job
+      loc="AI Talent Acquisition | Resume & LinkedIn Expert | Career Coach | Qatar Top #3 in HR",
+      desc="In today's market most software engineering jobs are flooded with candidates. Here's how to stand out. I coach engineers. In-demand skills: Angular, React, Node."),
+    J("Vacancy | Senior Software Developer | Waterfall, Johannesburg",  # generic, no FE role term
+      loc="47,886 followers",
+      desc="We have a vacancy for a Senior Software Developer. Stack: Angular, micro frontend, REST, JavaScript, C#, SQL Server."),
+    J("🚨 Hiring: Supply Chain Production Support Developer 🚨",       # non-FE role
+      loc="US IT Recruiter at Logic Planet INC",
+      desc="Hiring a Supply Chain Production Support Developer. Skills: SAP, SQL, Angular, Java. Send CV."),
+    J("#Hiring",                                                       # full-stack blast (per URL slug)
+      loc="Sr. Technical Recruiter",
+      desc="#immediatehiring Full Stack Developer. Java, Spring Boot, Angular, REST. C2C. Send resume."),
+    J("Hello LinkedIn,",                                               # no FE role term
+      loc="NA",
+      desc="Hello LinkedIn, we are hiring multiple positions. Skills include Angular, TypeScript, Node, Python. DM me."),
+    J("🔍 WE'RE HIRING!",                                              # OPT/CPT student bench program
+      loc="Helping graduate student with full time job in USA, entry level OPT/CPT placement",
+      desc="We're hiring! OPT/CPT welcome. Get hired in the USA. Skills: Angular, JavaScript. bashish@magnustechnol.com"),
+    J("Hiring !!",                                                     # US C2C staffing blast
+      loc="US Recruitment Specialist || W2, C2C, 1099 || USC, GC, EAD || Hiring Top IT Talent",
+      desc="Hiring !! Multiple roles. Angular, JavaScript, Java, .NET. C2C only. USC/GC/EAD."),
+    J("Hiring !!",                                                     # Sr Full Stack Developer (per URL slug)
+      loc="US Recruitment Specialist || W2, C2C, 1099 || USC, GC, EAD",
+      desc="Job Title: Sr. Full Stack Developer. Angular, .NET, SQL. C2C. Send CV."),
+    J("🚀 We're Hiring | Software Engineering Contractor | Remote",    # backend developer (per URL slug)
+      loc="Hiring W2 fulltime roles Across USA, UK, Canada & LATAM",
+      desc="We're hiring a Backend Developer (software engineer). Node, Python, Angular, TypeScript, REST. W2."),
+    J("🚀 Hiring: Applications Development Analyst 🚀",                # non-FE role
+      loc="Business Development Executive at CodeInsights",
+      desc="Hiring an Applications Development Analyst. Skills: Angular, REST, JavaScript, SQL, .NET."),
+    # --- classic noise ---
     J("How Angular signals work", loc="Software Engineer",
       desc="In this post I explain Angular signals and change detection — great for learning!"),
     J("Angular vs React in 2026", loc="Tech Lead",
       desc="My personal thoughts on the tradeoffs between Angular and React this year."),
     J("We're hiring a React Developer", loc="Recruiter",
       desc="React, Redux, TypeScript. Send your CV to careers@x.com"),
-    J("🚨 Hiring: Sr. .Net Full Stack Developer – C2C", loc="US IT Recruiter",
-      desc="C2C role. .NET, Angular, SQL Server. Send CV to bench@staffing.com"),
     J("Java Developer Junior", loc="HR",
       desc="Java, Spring Boot, some Angular exposure. Apply now"),
 ]
 
 def show_posts():
-    print(f"\n{'='*72}\n  HIRING POSTS (Angular + hiring intent; Egyptian/Arabic ranked first)\n{'='*72}")
-    for j in POSTS_KEEP + POSTS_DROP:
+    print(f"\n{'='*72}\n  HIRING POSTS (Angular front-end roles only; Egyptian/Arabic ranked first)\n{'='*72}")
+    print("  -- SHOULD KEEP --")
+    for j in POSTS_KEEP:
         if score.relevant_post(j, cfg):
             s, matched, label, reg = score.score_post(j, cfg)
-            print(f"  ✅ {s:>3}  {label:<26} {j['title'][:38]}")
+            print(f"  ✅ {s:>3}  {label:<26} {j['title'][:42]}")
         else:
-            print(f"  ❌ DROP  {'(no hiring intent / no Angular)':<26} {j['title'][:38]}")
+            print(f"  ⚠️  WRONGLY DROPPED            {j['title'][:42]}")
+    print("  -- SHOULD DROP --")
+    for j in POSTS_DROP:
+        if score.relevant_post(j, cfg):
+            s, matched, label, reg = score.score_post(j, cfg)
+            print(f"  ⚠️  LEAKED [{s:>3}] {label:<20} {j['title'][:42]}")
+        else:
+            print(f"  ❌ DROP                        {j['title'][:42]}")
+    bad_drop = sum(1 for j in POSTS_KEEP if not score.relevant_post(j, cfg))
+    bad_keep = sum(1 for j in POSTS_DROP if score.relevant_post(j, cfg))
+    print(f"\n  Posts summary: {len(POSTS_KEEP)-bad_drop}/{len(POSTS_KEEP)} kept correctly, "
+          f"{len(POSTS_DROP)-bad_keep}/{len(POSTS_DROP)} dropped correctly.")
 
 def show(label, jobs):
     print(f"\n{'='*72}\n  {label}\n{'='*72}")

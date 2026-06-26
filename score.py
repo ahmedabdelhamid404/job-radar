@@ -81,6 +81,35 @@ HIRING_AR = [
 ARABIC_RE = re.compile(r"[؀-ۿ]")
 CONTACT_RE = re.compile(r"[\w.+-]+@[\w-]+\.[a-z]{2,}", re.I)
 
+# A LinkedIn post's first line is a HOOK ("Hiring !!", "#Hiring", "🚀"), not the role — so the
+# advertised role must be read from the WHOLE body. These let us decide if a post is actually
+# about a front-end/Angular position vs a skill-soup blast where Angular is one of 20 tags.
+FE_ROLE = [
+    "angular developer", "angular engineer", "angular dev", "frontend developer",
+    "front-end developer", "front end developer", "frontend engineer", "front-end engineer",
+    "front end engineer", "frontend dev", "front-end dev", "ui developer", "ui engineer",
+    "ui/ux developer", "web front", "مطور angular", "مطور أنجولار", "مطور انجولار",
+    "مطور واجهات", "مطور فرونت", "فرونت اند", "فرونت إند",
+]
+NON_FE_ROLE = [
+    "full stack", "full-stack", "fullstack", "backend", "back-end", "back end",
+    "supply chain", "production support", "applications development analyst",
+    "application development analyst", "data engineer", "data analyst", "data scientist",
+    "devops", "site reliability", "sre engineer", "qa engineer", "test engineer",
+    "automation engineer", "salesforce", "workday", "scrum master", "project manager",
+    "business analyst", "product manager", "mobile developer", "android developer",
+    "ios developer", "java developer", ".net developer", "dotnet developer",
+    "python developer", "php developer", "node developer", "node.js developer",
+    "golang developer", "ruby developer", "database administrator", "network engineer",
+    "system administrator", "cloud engineer", "ml engineer", "ai engineer", "embedded",
+]
+# US bench-sales / C2C tells — work-authorization-gated, categorically useless from Egypt.
+US_STAFFING_RE = re.compile(
+    r"\b(c2c|corp[ -]to[ -]corp|w2|1099|usc|gc|ead|h1b|h-1b|opt|cpt|tn visa|"
+    r"green card|us citizen|only locals|must be local|onsite from day)\b", re.I)
+# generic multi-stack blast detection (Angular incidental among many)
+BLAST_TERMS = [".net", "dotnet", "react", "python", " php", "devops", "salesforce", " sap"]
+
 def text_of(j):
     return f"{j['title']} {j['location']} {' '.join(j.get('tags') or [])} {j['description']}".lower()
 
@@ -212,21 +241,35 @@ def is_hiring_post(text):
         return True
     return any(k in t for k in ["cv", "resume", "apply", "inbox", "dm "])
 
+def blast_count(text_lower):
+    """How many distinct non-Angular primary stacks the post lists (Angular incidental if high)."""
+    return (1 if JAVA_RE.search(text_lower) else 0) + sum(1 for o in BLAST_TERMS if o in text_lower)
+
 def relevant_post(j, cfg):
+    """A post is kept ONLY if it actually advertises an Angular / front-end role.
+    The role is read from the WHOLE body (the first line is just a hook on LinkedIn).
+    Trusted Arabic channel stays lenient; every English post must name a real FE role."""
     text = f"{j.get('title','')} {j.get('description','')}"
-    if "angular" not in text.lower():        # stay Angular-focused
+    tl = text.lower()
+    if "angular" not in tl:                      # stay Angular-focused
         return False
-    if not is_hiring_post(text):             # require genuine hiring intent (drops tutorials)
+    if not is_hiring_post(text):                 # genuine hiring intent (drops tutorials/opinion)
         return False
-    role = (j.get("title") or "").lower()    # the post's first line ≈ the advertised role
-    p = cfg["profile"]
-    if any(x in role for x in p.get("exclude_terms", [])):          # junior / intern
+    has_fe_role = any(r in tl for r in FE_ROLE) or any(r in text for r in FE_ROLE)
+    has_non_fe_role = any(r in tl for r in NON_FE_ROLE)
+    # --- hard drops that apply to EVERY post, judged on the whole body ---
+    if US_STAFFING_RE.search(text):              # C2C / W2 / OPT / USC / GC / EAD — work-auth gated
         return False
-    if any(s in role for s in p.get("exclude_stacks", [])) or JAVA_RE.search(role):  # backend / full-stack / .NET / Java
+    if any(x in tl for x in cfg["profile"].get("exclude_terms", [])) and not has_fe_role:
+        return False                             # junior/intern blast (unless explicitly an FE role)
+    if has_non_fe_role and not has_fe_role:      # advertised role is backend/full-stack/data/etc.
         return False
-    if any(c in role for c in COMPETING) and "angular" not in role:  # React/Vue-headlined staffing blast
+    if blast_count(tl) >= 2 and not has_fe_role: # generic multi-tech staffing blast
         return False
-    return True
+    # --- positive gate ---
+    if is_arabic(text):                          # trusted Arabic/Egyptian channel: lenient
+        return True
+    return has_fe_role                           # any English post must name an actual FE/Angular role
 
 def poster_region(j):
     """Region of the POSTER, from headline (location field) + name + post text."""
