@@ -1,8 +1,9 @@
-{%- macro btn(id, status, label, cls, back) -%}
+{%- macro btn(id, status, label, cls, back, kind) -%}
 <form method="post" action="/action" style="display:inline">
   <input type="hidden" name="id" value="{{ id }}">
   <input type="hidden" name="status" value="{{ status }}">
   <input type="hidden" name="back" value="{{ back }}">
+  <input type="hidden" name="kind" value="{{ kind }}">
   <button class="{{ cls }}" type="submit">{{ label }}</button>
 </form>
 {%- endmacro -%}
@@ -39,6 +40,11 @@
           padding:7px 13px;border-radius:8px 8px 0 0;font-size:13px;font-weight:600;}
   .tabs a.active{background:var(--navy);color:#fff;border-color:var(--navy);}
   .tabs a .n{opacity:.7;font-weight:400;}
+  .kinds{display:flex;gap:8px;padding:14px 22px 0;flex-wrap:wrap;}
+  .kinds a{text-decoration:none;color:var(--navy);background:#fff;border:1px solid var(--rule);
+           padding:8px 17px;border-radius:22px;font-size:14px;font-weight:700;}
+  .kinds a.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+  .kinds a .n{opacity:.6;font-weight:400;}
   .wrap{padding:16px 22px 40px;max-width:920px;}
   .empty{color:var(--muted);font-size:14px;padding:30px 0;}
   .card{background:#fff;border:1px solid var(--rule);border-radius:10px;padding:13px 15px;margin-bottom:11px;
@@ -70,18 +76,21 @@
     <div class="controls">
       <form method="post" action="/run">
         <input type="hidden" name="back" value="{{ status }}">
+        <input type="hidden" name="kind" value="{{ kind }}">
         <input type="hidden" name="tier" value="free">
         <button class="run" type="submit"{{ ' disabled' if scanning }}>{{ '⏳ Scanning…' if scanning else '🔄 Run Free' }}</button>
       </form>
       <form method="post" action="/run"
             onsubmit="return confirm('Run ALL scrapers, including the PAID Apify ones (LinkedIn, Wuzzuf, Indeed, Bayt + hiring posts)? This spends a few cents of your $5/mo Apify budget.');">
         <input type="hidden" name="back" value="{{ status }}">
+        <input type="hidden" name="kind" value="{{ kind }}">
         <input type="hidden" name="tier" value="all">
         <button class="runall" type="submit"{{ ' disabled' if scanning }}>{{ '⏳ Scanning…' if scanning else '💲 Run All (paid)' }}</button>
       </form>
       <form method="post" action="/clear"
             onsubmit="return confirm('Delete ALL jobs from every tab (Inbox, Applied, Interviewing, Dismissed)? This cannot be undone.');">
         <input type="hidden" name="back" value="{{ status }}">
+        <input type="hidden" name="kind" value="{{ kind }}">
         <button class="wipe" type="submit">🗑 Clear All</button>
       </form>
     </div>
@@ -93,15 +102,19 @@
     <div class="banner done">✅ Scan complete — {{ scan_found }}{% if scan_found is number %} new match{{ 'es' if scan_found != 1 else '' }} in 📥 Inbox{% endif %}.</div>
   {% endif %}
 
+  <div class="kinds">
+    <a class="{{ 'active' if kind=='jobs' }}" href="/?status={{ status }}&kind=jobs">💼 Jobs <span class="n">({{ kind_counts.jobs }})</span></a>
+    <a class="{{ 'active' if kind=='posts' }}" href="/?status={{ status }}&kind=posts">📣 Posts <span class="n">({{ kind_counts.posts }})</span></a>
+  </div>
   <div class="tabs">
     {% for key, label in tabs %}
-      <a class="{{ 'active' if key==status }}" href="/?status={{ key }}">{{ label }} <span class="n">({{ counts.get(key, 0) }})</span></a>
+      <a class="{{ 'active' if key==status }}" href="/?status={{ key }}&kind={{ kind }}">{{ label }} <span class="n">({{ counts.get(key, 0) }})</span></a>
     {% endfor %}
   </div>
 
   <div class="wrap">
     {% if not jobs %}
-      <div class="empty">Nothing here yet. New matches land in 📥 Inbox after the next radar run.</div>
+      <div class="empty">{% if kind == 'posts' %}No hiring posts here yet — they land here after a paid run (morning/evening).{% else %}Nothing here yet. New matches land in 📥 Inbox after the next radar run.{% endif %}</div>
     {% endif %}
 
     {% for j in jobs %}
@@ -119,13 +132,13 @@
         </div>
         <div class="pitch">{{ j.pitch }}</div>
         <div class="actions">
-          {% if j.url %}<a class="apply" href="{{ j.url }}" target="_blank" rel="noopener">Apply ↗</a>{% endif %}
+          {% if j.url %}<a class="apply" href="{{ j.url }}" target="_blank" rel="noopener">{{ 'Open post ↗' if kind == 'posts' else 'Apply ↗' }}</a>{% endif %}
           <button class="copy" onclick="cp(this)">📋 Copy for Claude</button>
           <pre style="display:none">{{ j.claude_prompt }}</pre>
-          {% if status != 'applied' %}{{ btn(j.id, 'applied', '✅ Applied', 'ok', status) }}{% endif %}
-          {% if status != 'interviewing' %}{{ btn(j.id, 'interviewing', '🎯 Interviewing', 'iv', status) }}{% endif %}
-          {% if status != 'new' %}{{ btn(j.id, 'new', '↩ Inbox', '', status) }}{% endif %}
-          {% if status != 'dismissed' %}{{ btn(j.id, 'dismissed', '🗑 Dismiss', 'rm', status) }}{% endif %}
+          {% if status != 'applied' %}{{ btn(j.id, 'applied', '✅ Applied', 'ok', status, kind) }}{% endif %}
+          {% if status != 'interviewing' %}{{ btn(j.id, 'interviewing', '🎯 Interviewing', 'iv', status, kind) }}{% endif %}
+          {% if status != 'new' %}{{ btn(j.id, 'new', '↩ Inbox', '', status, kind) }}{% endif %}
+          {% if status != 'dismissed' %}{{ btn(j.id, 'dismissed', '🗑 Dismiss', 'rm', status, kind) }}{% endif %}
         </div>
       </div>
     </div>

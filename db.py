@@ -41,17 +41,31 @@ def set_status(job_id, status):
     with conn() as c:
         c.execute("UPDATE jobs SET status=?, last_seen=? WHERE id=?", (status, time.time(), job_id))
 
-def jobs_by_status(status):
+POST_SOURCE = "LinkedIn Post"
+
+def _kind_clause(kind):
+    return "source = ?" if kind == "posts" else "source <> ?"
+
+def jobs_by_status(status, kind="jobs"):
     with conn() as c:
         rows = c.execute(
-            "SELECT * FROM jobs WHERE status=? ORDER BY score DESC, posted DESC, first_seen DESC", (status,)
+            f"SELECT * FROM jobs WHERE status=? AND {_kind_clause(kind)} "
+            "ORDER BY score DESC, posted DESC, first_seen DESC", (status, POST_SOURCE)
         ).fetchall()
     return [dict(r) for r in rows]
 
-def counts():
+def counts(kind="jobs"):
     with conn() as c:
-        rows = c.execute("SELECT status, COUNT(*) n FROM jobs GROUP BY status").fetchall()
+        rows = c.execute(
+            f"SELECT status, COUNT(*) n FROM jobs WHERE {_kind_clause(kind)} GROUP BY status",
+            (POST_SOURCE,)).fetchall()
     return {r["status"]: r["n"] for r in rows}
+
+def kind_counts():
+    with conn() as c:
+        posts = c.execute("SELECT COUNT(*) n FROM jobs WHERE source=?", (POST_SOURCE,)).fetchone()["n"]
+        jobs = c.execute("SELECT COUNT(*) n FROM jobs WHERE source<>?", (POST_SOURCE,)).fetchone()["n"]
+    return {"jobs": jobs, "posts": posts}
 
 def clear_all():
     with conn() as c:

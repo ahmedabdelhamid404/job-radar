@@ -38,6 +38,12 @@ def age_str(posted):
     return f"{int(d // 86400)}d ago"
 
 def claude_prompt(j):
+    if j.get("source") == "LinkedIn Post":
+        return (f"This is a LinkedIn hiring POST. Write me (a) a short, warm DM/comment to the poster "
+                f"and (b) a tailored cover letter, using my {j['cv']} CV "
+                f"(~/Documents/cvs/Ahmed-Abdelhamid-CV-{j['cv']}.pdf).\n\n"
+                f"Poster: {j['company']}\nPoster headline: {j['location']}\n"
+                f"Role line: {j['title']}\nPost link: {j['url']}")
     return (f"Help me apply to this job. Write a tailored cover letter and a list of likely "
             f"interview questions with strong answers, using my {j['cv']} CV "
             f"(at ~/Documents/cvs/Ahmed-Abdelhamid-CV-{j['cv']}.pdf).\n\n"
@@ -49,7 +55,10 @@ def index():
     status = request.args.get("status", "new")
     if status not in VALID:
         status = "new"
-    jobs = db.jobs_by_status(status)
+    kind = request.args.get("kind", "jobs")
+    if kind not in ("jobs", "posts"):
+        kind = "jobs"
+    jobs = db.jobs_by_status(status, kind)
     for j in jobs:
         j["claude_prompt"] = claude_prompt(j)
         j["matched_list"] = [m for m in (j.get("matched") or "").split(",") if m]
@@ -58,16 +67,16 @@ def index():
     found = _scan["found"]
     if not scanning and found is not None:
         _scan["found"] = None   # consume so the banner shows once
-    return render_template("dashboard.html", jobs=jobs, status=status,
-                           tabs=TABS, counts=db.counts(), scanning=scanning,
-                           scan_found=found, scan_tier=_scan.get("tier", ""))
+    return render_template("dashboard.html", jobs=jobs, status=status, kind=kind,
+                           tabs=TABS, counts=db.counts(kind), kind_counts=db.kind_counts(),
+                           scanning=scanning, scan_found=found, scan_tier=_scan.get("tier", ""))
 
 @app.route("/action", methods=["POST"])
 def action():
     new_status = request.form.get("status", "")
     if new_status in VALID:
         db.set_status(request.form["id"], new_status)
-    return redirect("/?status=" + request.form.get("back", "new"))
+    return redirect(f"/?status={request.form.get('back', 'new')}&kind={request.form.get('kind', 'jobs')}")
 
 @app.route("/run", methods=["POST"])
 def run_scan():
@@ -79,12 +88,12 @@ def run_scan():
         _scan["found"] = None
         _scan["tier"] = tier
         threading.Thread(target=_run_scan, args=(tier,), daemon=True).start()
-    return redirect("/?status=" + request.form.get("back", "new"))
+    return redirect(f"/?status={request.form.get('back', 'new')}&kind={request.form.get('kind', 'jobs')}")
 
 @app.route("/clear", methods=["POST"])
 def clear():
     db.clear_all()
-    return redirect("/?status=new")
+    return redirect(f"/?status=new&kind={request.form.get('kind', 'jobs')}")
 
 if __name__ == "__main__":
     db.init()
