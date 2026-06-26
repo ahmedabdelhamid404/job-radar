@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import logging, html, time
+import logging, html, time, re
 from pathlib import Path
 import yaml
 import db, sources, score, alerts, spend
@@ -107,12 +107,17 @@ def gather_apify(cfg, tier, jobs, failures):
     # LinkedIn — every tier (strongest cross-market source)
     paid("LinkedIn", "linkedin",
          lambda: sources.apify_linkedin(token, _linkedin_urls(cfg, query), caps.get("linkedin", 20)))
-    # Wuzzuf — morning + evening
+    # Wuzzuf + LinkedIn hiring POSTS — morning + evening (posts = Ahmed's top channel)
     if tier in ("all", "morning", "evening"):
         paid("Wuzzuf", "wuzzuf",
              lambda: sources.apify_wuzzuf(token,
                      ap.get("wuzzuf_url", "https://wuzzuf.net/search/jobs/?q=angular"),
                      caps.get("wuzzuf", 20)))
+        posts_cfg = ap.get("posts") or {}
+        if posts_cfg.get("queries"):
+            paid("LinkedIn Posts", "posts",
+                 lambda: sources.apify_linkedin_posts(token, posts_cfg["queries"],
+                         posts_cfg.get("cap", 15), posts_cfg.get("posted_limit", "week")))
     # Indeed + Bayt — morning only (cost control)
     if tier in ("all", "morning"):
         for c in ap.get("indeed_countries", ["us"]):
@@ -130,6 +135,21 @@ def process(cfg, raw):
             if j["id"] in seen:
                 continue
             seen.add(j["id"])
+            if j.get("kind") == "post":
+                if not score.relevant_post(j, cfg):
+                    continue
+                if not score.fresh(j, cfg):
+                    continue
+                if db.exists(c, j["id"]):
+                    continue
+                s, matched, plabel, reg = score.score_post(j, cfg)
+                cv = {"egypt": "Egypt", "gulf": "Gulf"}.get(reg, "International")
+                j2 = {**j, "score": s, "cv": cv, "matched": matched, "market": "📣 post",
+                      "remote": "remote" if score.is_remote(j) else "",
+                      "pitch": f"{plabel} · reach the poster directly. Matches {', '.join(matched[:4])}."}
+                db.insert_job(c, j2)
+                new.append(j2)
+                continue
             if not score.relevant(j, cfg):
                 continue
             if not score.fresh(j, cfg):
@@ -196,6 +216,48 @@ def notify_failures(cfg, failures):
     ok, info = alerts.send_telegram(cfg, "\n".join(lines))
     log.info("failure alert sent=%s info=%s", ok, info)
 
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[a-z]{2,}", re.I)
+_PHONE_RE = re.compile(r"(?:\+?\d[\d\s\-()]{8,}\d)")
+
+def _contacts(text):
+    emails = list(dict.fromkeys(_EMAIL_RE.findall(text or "")))[:3]
+    phones = list(dict.fromkeys(p.strip() for p in _PHONE_RE.findall(text or "")))[:2]
+    return emails, phones
+
+def notify_posts(cfg, posts):
+    """Send hiring posts with FULL text in an expandable quote + poster name/profile/contacts.
+    Arabic posts first (≈ Egyptian/MENA). Packed into as few messages as fit Telegram's limit."""
+    posts = sorted(posts, key=lambda j: (score.is_arabic(j.get("description") or ""),
+                                         j.get("score", 0)), reverse=True)
+    header = f"📣 <b>{len(posts)} new hiring post{'s' if len(posts) != 1 else ''}</b> · Arabic first"
+    messages, cur = [], header
+    for j in posts:
+        text = j.get("description") or ""
+        emails, phones = _contacts(text)
+        parts = [f"📣 <b>{j['score']}</b> — {html.escape(j.get('company') or 'LinkedIn member')}"]
+        if j.get("author_url"):
+            parts.append(f"👤 <a href=\"{html.escape(j['author_url'], quote=True)}\">profile</a>")
+        if j.get("url"):
+            parts.append(f"🔗 <a href=\"{html.escape(j['url'], quote=True)}\">post</a>")
+        block = " · ".join(parts)
+        cline = []
+        if emails:
+            cline.append("📧 " + ", ".join(html.escape(e) for e in emails))
+        if phones:
+            cline.append("📞 " + ", ".join(html.escape(p) for p in phones))
+        if cline:
+            block += "\n" + " · ".join(cline)
+        block += f"\n<blockquote expandable>{html.escape(text)[:3200]}</blockquote>"
+        if len(cur) + len(block) + 2 > 3900:
+            messages.append(cur)
+            cur = ""
+        cur += ("\n\n" if cur else "") + block
+    if cur:
+        messages.append(cur)
+    for m in messages:
+        ok, info = alerts.send_telegram(cfg, m)
+        log.info("post alert sent=%s", ok)
+
 def main(tier="all"):
     cfg = load_cfg()
     db.init()
@@ -203,8 +265,12 @@ def main(tier="all"):
     log.info("gathered %d raw (tier=%s); %d scraper failures", len(raw), tier, len(failures))
     new = process(cfg, raw)
     log.info("new matches: %d", len(new))
-    if new:
-        notify(cfg, new)
+    jobs = [j for j in new if j.get("kind") != "post"]
+    posts = [j for j in new if j.get("kind") == "post"]
+    if jobs:
+        notify(cfg, jobs)
+    if posts:
+        notify_posts(cfg, posts)
     if failures:
         notify_failures(cfg, failures)
     return new

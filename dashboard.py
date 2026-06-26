@@ -10,12 +10,12 @@ TABS = [("new", "📥 Inbox"), ("applied", "✅ Applied"),
         ("interviewing", "🎯 Interviewing"), ("dismissed", "🗑️ Dismissed")]
 VALID = {"new", "applied", "interviewing", "dismissed"}
 
-# in-memory state for the manual "Run Radar Now" button
-_scan = {"running": False, "found": None}
+# in-memory state for the manual run buttons
+_scan = {"running": False, "found": None, "tier": ""}
 
-def _run_scan():
+def _run_scan(tier):
     try:
-        _scan["found"] = len(radar.main())
+        _scan["found"] = len(radar.main(tier))
     except Exception as e:
         _scan["found"] = f"error: {e}"
     finally:
@@ -59,8 +59,8 @@ def index():
     if not scanning and found is not None:
         _scan["found"] = None   # consume so the banner shows once
     return render_template("dashboard.html", jobs=jobs, status=status,
-                           tabs=TABS, counts=db.counts(),
-                           scanning=scanning, scan_found=found)
+                           tabs=TABS, counts=db.counts(), scanning=scanning,
+                           scan_found=found, scan_tier=_scan.get("tier", ""))
 
 @app.route("/action", methods=["POST"])
 def action():
@@ -71,10 +71,14 @@ def action():
 
 @app.route("/run", methods=["POST"])
 def run_scan():
+    tier = request.form.get("tier", "all")
+    if tier not in ("free", "all"):
+        tier = "all"
     if not _scan["running"]:
         _scan["running"] = True
         _scan["found"] = None
-        threading.Thread(target=_run_scan, daemon=True).start()
+        _scan["tier"] = tier
+        threading.Thread(target=_run_scan, args=(tier,), daemon=True).start()
     return redirect("/?status=" + request.form.get("back", "new"))
 
 @app.route("/clear", methods=["POST"])

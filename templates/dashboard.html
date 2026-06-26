@@ -22,11 +22,14 @@
          justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;}
   header h1{margin:0;font-size:18px;letter-spacing:.5px;}
   header .sub{font-size:12px;opacity:.8;margin-top:2px;}
-  .controls{display:flex;gap:8px;flex-wrap:wrap;}
-  .controls button{font-size:13px;font-weight:700;border-radius:8px;padding:9px 14px;
-        border:1px solid transparent;cursor:pointer;}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+  .controls form{margin:0;display:flex;}
+  .controls button{font-size:13px;font-weight:700;border-radius:8px;padding:9px 14px;height:38px;
+        border:1px solid transparent;cursor:pointer;line-height:1;white-space:nowrap;
+        display:inline-flex;align-items:center;}
   .controls .run{background:#2ea36a;color:#fff;}
-  .controls .run:disabled{opacity:.6;cursor:default;}
+  .controls .runall{background:#d8a93a;color:#15324f;}
+  .controls .run:disabled,.controls .runall:disabled{opacity:.55;cursor:default;}
   .controls .wipe{background:transparent;color:#fff;border-color:rgba(255,255,255,.45);}
   .banner{margin:12px 22px 0;padding:9px 14px;border-radius:8px;font-size:13px;font-weight:600;max-width:920px;}
   .banner.scan{background:#fff7e6;color:#8a5a00;border:1px solid #f0d9a8;}
@@ -65,19 +68,27 @@
       <div class="sub">Angular / Front-End matches · click an action to file a job · 📋 copies a ready prompt for Claude</div>
     </div>
     <div class="controls">
-      <form method="post" action="/run" style="display:inline">
+      <form method="post" action="/run">
         <input type="hidden" name="back" value="{{ status }}">
-        <button class="run" type="submit"{{ ' disabled' if scanning }}>{{ '⏳ Scanning…' if scanning else '🔄 Run Radar Now' }}</button>
+        <input type="hidden" name="tier" value="free">
+        <button class="run" type="submit"{{ ' disabled' if scanning }}>{{ '⏳ Scanning…' if scanning else '🔄 Run Free' }}</button>
       </form>
-      <form method="post" action="/clear" style="display:inline"
+      <form method="post" action="/run"
+            onsubmit="return confirm('Run ALL scrapers, including the PAID Apify ones (LinkedIn, Wuzzuf, Indeed, Bayt + hiring posts)? This spends a few cents of your $5/mo Apify budget.');">
+        <input type="hidden" name="back" value="{{ status }}">
+        <input type="hidden" name="tier" value="all">
+        <button class="runall" type="submit"{{ ' disabled' if scanning }}>{{ '⏳ Scanning…' if scanning else '💲 Run All (paid)' }}</button>
+      </form>
+      <form method="post" action="/clear"
             onsubmit="return confirm('Delete ALL jobs from every tab (Inbox, Applied, Interviewing, Dismissed)? This cannot be undone.');">
+        <input type="hidden" name="back" value="{{ status }}">
         <button class="wipe" type="submit">🗑 Clear All</button>
       </form>
     </div>
   </header>
 
   {% if scanning %}
-    <div class="banner scan">⏳ Radar is scanning all sources… this page refreshes automatically when it's done.</div>
+    <div class="banner scan">⏳ Radar is scanning{{ ' (free sources)' if scan_tier == 'free' else ' — all sources incl. paid' if scan_tier == 'all' else '' }}… this page refreshes automatically when it's done.</div>
   {% elif scan_found is not none %}
     <div class="banner done">✅ Scan complete — {{ scan_found }}{% if scan_found is number %} new match{{ 'es' if scan_found != 1 else '' }} in 📥 Inbox{% endif %}.</div>
   {% endif %}

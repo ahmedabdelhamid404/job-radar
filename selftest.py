@@ -81,6 +81,41 @@ TZ = [
     J("Angular Developer", desc="must overlap with US Pacific (PST) hours", loc="Remote - US"),
 ]
 
+# ---- LinkedIn hiring posts (loc = poster headline) ----
+POSTS_KEEP = [
+    J("مطلوب مطور Angular", loc="HR Specialist | Hiring in Egypt",
+      desc="شركة بالقاهرة تعلن عن حاجتها لمطور Angular، للتقديم برجاء إرسال السيرة الذاتية على hr@company.com"),
+    J("We're hiring a Senior Angular Developer", loc="Talent Acquisition at Sword Egypt",
+      desc="Cairo-based, hybrid. Strong Angular & RxJS. Send your CV to jobs@sword.eg"),
+    J("Exciting opportunity!", loc="Technical Recruiter",
+      desc="We are thrilled to announce we're hiring an Angular Engineer. Remote, async, work anywhere. Apply now!"),
+    J("Hiring Angular dev", loc="Founder at a Dubai startup",
+      desc="نوظف Angular developer للعمل من دبي. أرسل CV"),
+    J("🚀 We're Hiring!", loc="US IT Recruiter",
+      desc="Multiple C2C roles: Java, .NET, React, Python, Angular, DevOps. Send CV"),  # blast → low score
+]
+POSTS_DROP = [
+    J("How Angular signals work", loc="Software Engineer",
+      desc="In this post I explain Angular signals and change detection — great for learning!"),
+    J("Angular vs React in 2026", loc="Tech Lead",
+      desc="My personal thoughts on the tradeoffs between Angular and React this year."),
+    J("We're hiring a React Developer", loc="Recruiter",
+      desc="React, Redux, TypeScript. Send your CV to careers@x.com"),
+    J("🚨 Hiring: Sr. .Net Full Stack Developer – C2C", loc="US IT Recruiter",
+      desc="C2C role. .NET, Angular, SQL Server. Send CV to bench@staffing.com"),
+    J("Java Developer Junior", loc="HR",
+      desc="Java, Spring Boot, some Angular exposure. Apply now"),
+]
+
+def show_posts():
+    print(f"\n{'='*72}\n  HIRING POSTS (Angular + hiring intent; Egyptian/Arabic ranked first)\n{'='*72}")
+    for j in POSTS_KEEP + POSTS_DROP:
+        if score.relevant_post(j, cfg):
+            s, matched, label, reg = score.score_post(j, cfg)
+            print(f"  ✅ {s:>3}  {label:<26} {j['title'][:38]}")
+        else:
+            print(f"  ❌ DROP  {'(no hiring intent / no Angular)':<26} {j['title'][:38]}")
+
 def show(label, jobs):
     print(f"\n{'='*72}\n  {label}\n{'='*72}")
     for j in jobs:
@@ -105,6 +140,7 @@ if __name__ == "__main__":
     show("SHOULD SELECT (25)", SELECT)
     show("SHOULD DROP (25)", DROP)
     show_tz()
+    show_posts()
     bad_keep = sum(1 for j in DROP if score.relevant(j, cfg))
     bad_drop = sum(1 for j in SELECT if not score.relevant(j, cfg))
     print(f"\nSummary: {len(SELECT)-bad_drop}/{len(SELECT)} kept correctly, "

@@ -1,4 +1,4 @@
-import hashlib, calendar
+import hashlib, calendar, time
 from datetime import datetime, timezone
 import requests, feedparser
 
@@ -38,7 +38,7 @@ def _mk(title, company, location, url, description, source, remote=None, tags=No
         "description": description or "",
         "source": source,
         "remote": remote,
-        "tags": [t for t in (tags or []) if t],
+        "tags": [t for t in (tags or []) if isinstance(t, str) and t],
         "posted": posted,
     }
 
@@ -137,18 +137,32 @@ def adzuna(app_id, app_key, country, query):
 # ---- Apify scrapers (pay-per-result) ----
 # Each raises RuntimeError on a failed/blocked run so radar can fire a Telegram alert.
 
-def _apify(token, actor, run_input, max_items, timeout=120):
-    r = requests.post(
-        f"https://api.apify.com/v2/acts/{actor}/run-sync-get-dataset-items",
-        params={"token": token, "maxItems": max_items, "timeout": timeout},
-        json=run_input, timeout=timeout + 40)
-    if not r.ok:
+def _apify(token, actor, run_input, max_items, timeout=120, attempts=2):
+    """Run an actor; retry ONCE on a transient failure (abort/timeout/rate-limit/network)
+    before giving up. Permanent errors (bad input) are not retried."""
+    last = "unknown error"
+    for i in range(attempts):
         try:
-            msg = (r.json().get("error") or {}).get("message", r.text[:160])
-        except Exception:
-            msg = r.text[:160]
-        raise RuntimeError(f"HTTP {r.status_code}: {msg}")
-    return r.json()
+            r = requests.post(
+                f"https://api.apify.com/v2/acts/{actor}/run-sync-get-dataset-items",
+                params={"token": token, "maxItems": max_items, "timeout": timeout},
+                json=run_input, timeout=timeout + 40)
+            if r.ok:
+                return r.json()
+            try:
+                msg = (r.json().get("error") or {}).get("message", r.text[:160])
+            except Exception:
+                msg = r.text[:160]
+            last = f"HTTP {r.status_code}: {msg}"
+            transient = r.status_code >= 500 or any(
+                w in msg.lower() for w in ("aborted", "timed out", "timeout", "rate limit", "429", "blocked"))
+            if not transient:
+                break               # bad input / below-minimum etc. — retry won't help
+        except Exception as e:
+            last = f"{type(e).__name__}: {str(e)[:140]}"   # network glitch — transient
+        if i < attempts - 1:
+            time.sleep(15)          # brief backoff, then one retry
+    raise RuntimeError(last)
 
 def _clean(v):
     return "" if v in (None, "None") else str(v)
@@ -217,5 +231,31 @@ def apify_bayt(token, country, query, cap):
                        "Bayt", remote=(rem if isinstance(rem, bool) else None),
                        tags=it.get("skills"),
                        posted=_epoch(it.get("postedDate") or it.get("postedAt"))))
+    return out
+
+def apify_linkedin_posts(token, queries, cap, posted_limit="week"):
+    cap = max(int(cap), 6)   # Apify enforces a $0.01 min charge (~$0.002/post)
+    items = _apify(token, "harvestapi~linkedin-post-search",
+                   {"searchQueries": queries, "maxPosts": cap,
+                    "postedLimit": posted_limit, "sortBy": "date"}, cap)
+    out = []
+    for it in items:
+        if it.get("error"):
+            continue
+        content = (it.get("content") or "").strip()
+        if not content:
+            continue
+        au = it.get("author") or {}
+        author = au.get("name") or au.get("publicIdentifier") or "LinkedIn member"
+        headline = au.get("info") or ""          # poster's headline — carries their region
+        pa = it.get("postedAt") or {}
+        posted = _epoch(pa.get("date")) if isinstance(pa, dict) else _epoch(pa)
+        title = (content.splitlines()[0].strip() or content)[:90].strip()
+        j = _mk(title, author, headline,
+                it.get("linkedinUrl") or it.get("shareLinkedinUrl") or it.get("url"),
+                content, "LinkedIn Post", remote=None, tags=[it.get("query")], posted=posted)
+        j["kind"] = "post"
+        j["author_url"] = au.get("linkedinUrl") or ""   # poster profile — so Ahmed can judge
+        out.append(j)
     return out
 

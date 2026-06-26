@@ -47,6 +47,40 @@ US_STATES = {"al","ak","az","ar","ca","co","ct","de","fl","ga","hi","id","il","i
              "wv","wi","wy","dc"}
 US_WEST = {"ca","wa","or","nv","az","ut","id","mt","wy","co","nm","hi","ak"}
 
+# ---- LinkedIn hiring-POST detection (Arabic-priority — the hidden, low-competition market) ----
+HIRING_EN = [
+    "hiring", "#hiring", "we're hiring", "we are hiring", "now hiring", "now recruiting",
+    "recruiting", "we're recruiting", "i'm hiring", "i am hiring", "my team is hiring",
+    "we're looking for", "we are looking for", "looking for a", "looking for an",
+    "looking to hire", "seeking a", "seeking an", "we're seeking", "in search of",
+    "join our team", "join us", "join our growing team", "be part of our team",
+    "open position", "open positions", "open role", "open roles", "role available",
+    "vacancy", "vacancies", "job opening", "job openings", "job opportunity",
+    "career opportunity", "exciting opportunity", "we have an opening", "opening for",
+    "immediate joiners", "immediate hiring", "immediate joining", "urgent requirement",
+    "urgent hiring", "urgently hiring", "apply now", "to apply", "how to apply",
+    "send your cv", "send your resume", "share your cv", "drop your cv", "send cv",
+    "interested candidates", "dm me", "dm for", "inbox me", "reach out", "we'd love to hear",
+    "we would love to hear", "wanted", "talent needed", "we're growing", "we are growing",
+    # AI-written giveaways (recruiters increasingly use ChatGPT)
+    "thrilled to announce", "excited to announce", "we are thrilled", "we are excited to",
+    "if you're passionate", "if you are passionate", "passionate about",
+]
+HIRING_AR = [
+    "مطلوب", "مطلوب للعمل", "مطلوب موظف", "مطلوب مطور", "مطلوب مهندس",
+    "نوظف", "بنوظف", "هنوظف", "نعلن", "تعلن", "يعلن", "نعلن عن", "تعلن شركة",
+    "نبحث عن", "نبحث", "نحتاج", "محتاج", "محتاجين",
+    "فرصة عمل", "فرص عمل", "فرصة وظيفية", "فرص وظيفية", "فرصة توظيف",
+    "وظيفة", "وظائف", "وظائف خالية", "وظيفة شاغرة", "وظائف شاغرة", "شاغرة",
+    "للتقديم", "التقديم", "برجاء إرسال", "يرجى إرسال", "ارسل", "أرسل", "ابعت", "ابعتلي",
+    "سيرة ذاتية", "السيرة الذاتية", "سي في",
+    "التوظيف", "التعيين", "اعلان توظيف", "إعلان توظيف", "اعلان وظيفة", "إعلان وظيفة",
+    "انضم", "انضم إلينا", "انضم لفريقنا", "هتنضم", "فريق العمل",
+    "مطور واجهات", "واجهات أمامية", "فرونت اند", "فرونت إند",
+]
+ARABIC_RE = re.compile(r"[؀-ۿ]")
+CONTACT_RE = re.compile(r"[\w.+-]+@[\w-]+\.[a-z]{2,}", re.I)
+
 def text_of(j):
     return f"{j['title']} {j['location']} {' '.join(j.get('tags') or [])} {j['description']}".lower()
 
@@ -164,6 +198,69 @@ def score(j, cfg):
     if is_remote(j):
         s += 6
     return max(0, min(100, s)), matched, tr
+
+def is_arabic(text):
+    return bool(ARABIC_RE.search(text or ""))
+
+def is_hiring_post(text):
+    t = (text or "").lower()
+    if any(k in t for k in HIRING_EN):
+        return True
+    if any(k in (text or "") for k in HIRING_AR):       # Arabic — don't lowercase
+        return True
+    if CONTACT_RE.search(text or ""):                   # an apply-to email = hiring intent
+        return True
+    return any(k in t for k in ["cv", "resume", "apply", "inbox", "dm "])
+
+def relevant_post(j, cfg):
+    text = f"{j.get('title','')} {j.get('description','')}"
+    if "angular" not in text.lower():        # stay Angular-focused
+        return False
+    if not is_hiring_post(text):             # require genuine hiring intent (drops tutorials)
+        return False
+    role = (j.get("title") or "").lower()    # the post's first line ≈ the advertised role
+    p = cfg["profile"]
+    if any(x in role for x in p.get("exclude_terms", [])):          # junior / intern
+        return False
+    if any(s in role for s in p.get("exclude_stacks", [])) or JAVA_RE.search(role):  # backend / full-stack / .NET / Java
+        return False
+    if any(c in role for c in COMPETING) and "angular" not in role:  # React/Vue-headlined staffing blast
+        return False
+    return True
+
+def poster_region(j):
+    """Region of the POSTER, from headline (location field) + name + post text."""
+    blob = f"{j.get('location','')} {j.get('company','')} {j.get('description','')}".lower()
+    if any(w in blob for w in EGYPT):
+        return "egypt"
+    if any(w in blob for w in GULF):
+        return "gulf"
+    return None
+
+def score_post(j, cfg):
+    text = f"{j.get('title','')} {j.get('description','')}"
+    t = text.lower()
+    reg = poster_region(j)
+    s = 50
+    if reg == "egypt":
+        s += 30                              # Egyptian poster = rank 1 (Ahmed's proven channel)
+    elif reg == "gulf":
+        s += 18                              # MENA/Gulf = rank 2
+    if is_arabic(text):
+        s += 8
+    s += 3 * min(sum(1 for d in DEPTH if d in t), 4)
+    if any(sr in t for sr in SENIOR):
+        s += 5
+    if "remote" in t or "عن بعد" in text:
+        s += 4
+    blast = (1 if JAVA_RE.search(t) else 0) + sum(
+        1 for o in [".net", "dotnet", "react", "python", " php", "devops", "salesforce", " sap"] if o in t)
+    if blast >= 2:
+        s -= 18                          # generic multi-tech staffing blast, not Angular-focused
+    matched = [sk for sk in cfg["profile"]["skills"] if sk.lower() in t][:6]
+    label = {"egypt": "📣🇪🇬 Egyptian hiring post",
+             "gulf": "📣🕌 MENA hiring post"}.get(reg, "📣🌍 hiring post")
+    return max(0, min(100, s)), (matched or ["Angular"]), label, reg
 
 def pick_cv(j):
     r = region(j)
