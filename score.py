@@ -9,8 +9,19 @@ SENIOR = ["senior", "lead", "principal", "staff", "sr."]
 JUNIOR = ["junior", "intern", "trainee", "graduate", "apprentice"]
 FE = ["frontend", "front-end", "front end"]
 JAVA_RE = re.compile(r"\bjava\b", re.I)   # whole word — never matches "javascript"
-OTHER_STACK = ["react", "vue", "svelte", "node", "nodejs", "node.js", "next.js", "nextjs",
-               "nuxt", "python", "php", "ruby", "golang", "django", "rails", ".net", "java"]
+# competing front-end frameworks: fine ALONGSIDE Angular, but a title naming one of these
+# WITHOUT Angular = a React/Vue-primary role -> dropped (the "where is Angular?" case).
+COMPETING = ["react", "reactjs", "react.js", "react native", "vue", "vuejs", "vue.js",
+             "svelte", "sveltekit", "next.js", "nextjs", "nuxt", "ember", "backbone", "blazor"]
+# Tier D gate: a description-only Angular match counts ONLY if the TITLE is clearly a
+# front-end / web / UI role — NOT DevOps, data, QA, security, mobile, RPG, generic "software".
+FRONTEND_TITLE = ["frontend", "front-end", "front end", "web developer", "web engineer",
+                  "ui developer", "ui engineer", "ui/ux", "javascript", "typescript"]
+TIER_BONUS = {"A": 45, "B": 30, "C": 18, "D": 10}
+TIER_LABEL = {"A": "⭐ Clean Angular", "B": "Angular-led", "C": "Angular (mixed)", "D": "Angular in description"}
+# Angular-ecosystem signals that mean the role genuinely fits Ahmed's CV
+DEPTH = ["rxjs", "ngrx", "signal", "nx ", "micro frontend", "micro-frontend", "ssr",
+         "hydration", "angular material", " cdk", "esbuild", "standalone"]
 
 def text_of(j):
     return f"{j['title']} {j['location']} {' '.join(j.get('tags') or [])} {j['description']}".lower()
@@ -52,14 +63,31 @@ def relevant(j, cfg):
     p = cfg["profile"]
     if any(x in title for x in p.get("exclude_terms", [])):
         return False
-    if is_backend_primary(j["title"], cfg):
+    if is_backend_primary(j["title"], cfg):          # backend / full-stack / .NET / Java
         return False
-    must = p.get("must_have_any", ["angular"])
-    if any(m in title or m in tags for m in must):
+    ang_title = "angular" in title
+    competing_title = any(c in title for c in COMPETING)
+    if competing_title and not ang_title:            # React/Vue-primary title -> drop
+        return False
+    if ang_title or "angular" in tags:               # Angular named in title/tags -> keep
         return True
-    if any(m in desc for m in must) and any(f in title for f in FE):
+    # generic front-end / web / UI title + Angular in the body (Tier D)
+    if not competing_title and "angular" in desc and any(d in title for d in FRONTEND_TITLE):
         return True
     return False
+
+def tier(j):
+    title = j["title"].lower()
+    tags = " ".join(j.get("tags") or []).lower()
+    ang_title = "angular" in title
+    comp = [c for c in COMPETING if c in title]
+    if ang_title and not comp:
+        return "A"                                   # clean Angular title
+    if ang_title and comp:                           # Angular + another framework in title
+        return "B" if title.index("angular") < min(title.index(c) for c in comp) else "C"
+    if "angular" in tags:
+        return "B"
+    return "D"                                       # Angular in the body only
 
 def fresh(j, cfg):
     posted = j.get("posted")
@@ -76,24 +104,19 @@ def score(j, cfg):
     for sk in cfg["profile"]["skills"]:
         if sk.lower() in t:
             matched.append(sk)
-            s += 6
-    if "angular" in title:
-        s += 25
-    elif "angular" in t:
-        s += 10
-    if "angular" in title and not any(o in title for o in OTHER_STACK):
-        s += 20   # clean Angular title, no other stack mixed in
-    if any(f in title for f in FE):
-        s += 12
+    s += 4 * min(len(matched), 6)                    # skills: secondary signal, capped at +24
+    tr = tier(j)
+    s += TIER_BONUS[tr]                              # Angular-primary dominates the ranking
+    s += 3 * min(sum(1 for d in DEPTH if d in t), 5) # ecosystem depth = fits the CV (capped)
     if any(sr in title for sr in SENIOR):
-        s += 15
+        s += 12
     elif "mid" in title:
-        s += 5
+        s += 4
     if any(jr in title for jr in JUNIOR):
-        s -= 20
+        s -= 25
     if is_remote(j):
-        s += 8
-    return max(0, min(100, s)), matched
+        s += 6
+    return max(0, min(100, s)), matched, tr
 
 def pick_cv(j):
     r = region(j)
@@ -102,6 +125,7 @@ def pick_cv(j):
 def market_of(j):
     return region(j) or "remote/intl"
 
-def pitch(j, matched, cv):
+def pitch(j, matched, cv, tier_label=""):
     top = ", ".join(matched[:5]) if matched else "your Angular / front-end stack"
-    return f"Matches {top}. Recommended CV: {cv}."
+    lead = f"{tier_label} · " if tier_label else ""
+    return f"{lead}Matches {top}. Recommended CV: {cv}."

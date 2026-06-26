@@ -2,7 +2,7 @@
 
 profile:
   must_have_any: [angular]          # a job must mention at least one of these (or "frontend" in the title)
-  exclude_terms: [intern, internship, trainee, graduate, apprentice]   # drop if these appear in the TITLE
+  exclude_terms: [intern, internship, trainee, graduate, apprentice, junior]   # drop if these appear in the TITLE
   exclude_stacks: [".net", "asp.net", "dotnet", "full stack", "fullstack", "full-stack", "backend", "back end", "back-end"]  # backend-primary / full-stack roles (Angular not the main job)
   skills:                           # used to score fit + build the match pitch
     - Angular
@@ -49,6 +49,30 @@ keys:               # all optional — empty keys just skip that source
   adzuna_app_id: ""       # https://developer.adzuna.com
   adzuna_app_key: ""
   careerjet_affid: ""
+
+apify:              # paid scrapers (LinkedIn / Wuzzuf / Indeed / Bayt). Empty token = skip them all.
+  token: ""               # https://console.apify.com/account/integrations
+  query: "Angular"
+  spend_guard_usd: 4.50         # skip paid scrapers once this month's est. spend hits this
+  monthly_budget_usd: 5.00      # Apify FREE plan hard-stops here regardless
+  indeed_countries: ["us"]      # Indeed is 5x pricier per result; keep this list short
+  bayt_country: "INTERNATIONAL" # INTERNATIONAL / EG / AE / SA
+  wuzzuf_url: "https://wuzzuf.net/search/jobs/?q=angular"
+  caps:                         # max results per run = the per-run cost cap
+    linkedin: 20                # actor floor is 10
+    wuzzuf: 20
+    indeed: 15
+    bayt: 15                    # floor 12 (clears the $0.01 start fee)
+  actors:
+    linkedin: "curious_coder~linkedin-jobs-scraper"
+    wuzzuf: "shahidirfan~Wuzzuf-Jobs-Scraper"
+    indeed: "borderline~indeed-scraper"
+    bayt: "blackfalcondata~bayt-scraper"
+  prices:                       # per-result + fixed start fee, for spend estimation
+    linkedin: {result: 0.001, start: 0.0}
+    wuzzuf:   {result: 0.001, start: 0.0}
+    indeed:   {result: 0.005, start: 0.0}
+    bayt:     {result: 0.001, start: 0.01}
 
 alerts:
   telegram: true

@@ -1,5 +1,6 @@
 config.yaml
 jobs.db
+spend.json
 *.log
 venv/
 __pycache__/

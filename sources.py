@@ -16,7 +16,8 @@ def _epoch(val):
         return datetime.fromisoformat(s).timestamp()
     except Exception:
         pass
-    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
+                "%m/%d/%Y %H:%M:%S", "%m/%d/%Y"):
         try:
             return datetime.strptime(s[:19], fmt).replace(tzinfo=timezone.utc).timestamp()
         except Exception:
@@ -132,3 +133,89 @@ def adzuna(app_id, app_key, country, query):
                        it.get("description"), "Adzuna", remote=None,
                        posted=_epoch(it.get("created"))))
     return out
+
+# ---- Apify scrapers (pay-per-result) ----
+# Each raises RuntimeError on a failed/blocked run so radar can fire a Telegram alert.
+
+def _apify(token, actor, run_input, max_items, timeout=120):
+    r = requests.post(
+        f"https://api.apify.com/v2/acts/{actor}/run-sync-get-dataset-items",
+        params={"token": token, "maxItems": max_items, "timeout": timeout},
+        json=run_input, timeout=timeout + 40)
+    if not r.ok:
+        try:
+            msg = (r.json().get("error") or {}).get("message", r.text[:160])
+        except Exception:
+            msg = r.text[:160]
+        raise RuntimeError(f"HTTP {r.status_code}: {msg}")
+    return r.json()
+
+def _clean(v):
+    return "" if v in (None, "None") else str(v)
+
+def apify_linkedin(token, urls, cap):
+    cap = max(int(cap), 10)   # actor refuses < 10 records
+    items = _apify(token, "curious_coder~linkedin-jobs-scraper",
+                   {"urls": urls, "count": cap, "scrapeCompany": False}, cap)
+    out = []
+    for it in items:
+        if it.get("error"):
+            raise RuntimeError(f"LinkedIn actor error: {str(it['error'])[:120]}")
+        loc = _clean(it.get("location"))
+        remote = True if "remote" in (loc + " " + _clean(it.get("title"))).lower() else None
+        out.append(_mk(it.get("title"), it.get("companyName"), loc,
+                       it.get("link") or it.get("applyUrl"),
+                       it.get("descriptionText") or it.get("descriptionHtml"),
+                       "LinkedIn", remote=remote,
+                       tags=[it.get("seniorityLevel"), it.get("employmentType"),
+                             it.get("jobFunction"), it.get("industries")],
+                       posted=_epoch(it.get("postedAt"))))
+    return out
+
+def apify_wuzzuf(token, search_url, cap):
+    items = _apify(token, "shahidirfan~Wuzzuf-Jobs-Scraper",
+                   {"startUrl": search_url, "results_wanted": int(cap), "max_pages": 2}, int(cap))
+    out = []
+    for it in items:
+        if it.get("status") == "no_results" or "title" not in it:
+            continue   # sentinel record, not a failure
+        out.append(_mk(it.get("title"), it.get("company"), it.get("location"),
+                       it.get("url"), it.get("description_text") or it.get("description_html"),
+                       "Wuzzuf", remote=None, tags=it.get("skills"),
+                       posted=_epoch(it.get("date_posted"))))
+    return out
+
+def apify_indeed(token, country, query, cap, remote_only=True):
+    inp = {"country": country, "query": query, "maxRows": int(cap), "fromDays": "7", "sort": "date"}
+    if remote_only:
+        inp["remote"] = "remote"
+    items = _apify(token, "borderline~indeed-scraper", inp, int(cap))
+    out = []
+    for it in items:
+        loc = it.get("location")
+        if isinstance(loc, dict):
+            loc = ", ".join(x for x in [loc.get("city"), loc.get("country")] if x)
+        tags = (it.get("occupation") or []) + (it.get("attributes") or [])[:3]
+        out.append(_mk(it.get("title"), it.get("companyName"), _clean(loc),
+                       it.get("jobUrl") or it.get("applyUrl"), it.get("descriptionText"),
+                       "Indeed", remote=bool(it.get("isRemote")) or None, tags=tags,
+                       posted=_epoch(it.get("datePublished"))))
+    return out
+
+def apify_bayt(token, country, query, cap):
+    cap = max(int(cap), 12)   # floor clears the $0.01 start fee (else run auto-aborts)
+    items = _apify(token, "blackfalcondata~bayt-scraper",
+                   {"query": query, "country": country, "maxResults": cap, "includeDetails": True}, cap)
+    out = []
+    for it in items:
+        loc = _clean(it.get("location")) or ", ".join(
+            x for x in [_clean(it.get("city")), _clean(it.get("country"))] if x)
+        rem = it.get("isRemote")
+        out.append(_mk(it.get("title"), it.get("company"), loc,
+                       it.get("url") or it.get("applyUrl"),
+                       it.get("description") or it.get("descriptionText"),
+                       "Bayt", remote=(rem if isinstance(rem, bool) else None),
+                       tags=it.get("skills"),
+                       posted=_epoch(it.get("postedDate") or it.get("postedAt"))))
+    return out
+
