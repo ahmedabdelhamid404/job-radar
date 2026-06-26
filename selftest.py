@@ -102,7 +102,7 @@ POSTS_DROP = [
     # --- the 10 real leaks ---
     J("Most Software Engineering jobs are flooded with candidates.",  # career-coach commentary, not a job
       loc="AI Talent Acquisition | Resume & LinkedIn Expert | Career Coach | Qatar Top #3 in HR",
-      desc="In today's market most software engineering jobs are flooded with candidates. Here's how to stand out. I coach engineers. In-demand skills: Angular, React, Node."),
+      desc="Most software engineering jobs are flooded with candidates, yet most use generic keyword searches. Roles like Angular Developer and Front End Developer are competitive. I help engineers stand out."),
     J("Vacancy | Senior Software Developer | Waterfall, Johannesburg",  # generic, no FE role term
       loc="47,886 followers",
       desc="We have a vacancy for a Senior Software Developer. Stack: Angular, micro frontend, REST, JavaScript, C#, SQL Server."),
@@ -130,6 +130,9 @@ POSTS_DROP = [
     J("🚀 Hiring: Applications Development Analyst 🚀",                # non-FE role
       loc="Business Development Executive at CodeInsights",
       desc="Hiring an Applications Development Analyst. Skills: Angular, REST, JavaScript, SQL, .NET."),
+    J("🚨 Hiring: Java Developer – Front End (Angular) 🚨",            # Java-primary, title leads non-FE
+      loc="Aspiring cybersecurity enthusiast and data analyst",
+      desc="Hiring a Java Developer - Front End (Angular). Toronto, ON (4 Days/Week Onsite). Face-to-Face interview required."),
     # --- classic noise ---
     J("How Angular signals work", loc="Software Engineer",
       desc="In this post I explain Angular signals and change detection — great for learning!"),

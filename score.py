@@ -109,6 +109,14 @@ US_STAFFING_RE = re.compile(
     r"green card|us citizen|only locals|must be local|onsite from day)\b", re.I)
 # generic multi-stack blast detection (Angular incidental among many)
 BLAST_TERMS = [".net", "dotnet", "react", "python", " php", "devops", "salesforce", " sap"]
+# job-SEEKER-facing advice / career-coaching content — NOT a vacancy. High-precision phrases
+# only (never appear in a real job ad — note "send your resume" must stay safe).
+SEEKER_NOISE = [
+    "flooded with candidates", "how to stand out", "stand out from the", "how to get hired",
+    "job seekers", "resume tips", "linkedin tips", "optimize your linkedin", "optimize your profile",
+    "personal branding", "career coaching", "i help candidates", "i help engineers",
+    "i help job", "generic keyword", "keyword searches", "tips to land", "land your dream",
+]
 
 def text_of(j):
     return f"{j['title']} {j['location']} {' '.join(j.get('tags') or [])} {j['description']}".lower()
@@ -255,8 +263,17 @@ def relevant_post(j, cfg):
         return False
     if not is_hiring_post(text):                 # genuine hiring intent (drops tutorials/opinion)
         return False
+    if any(p in tl for p in SEEKER_NOISE):       # career-coaching / job-seeker advice, not a vacancy
+        return False
     has_fe_role = any(r in tl for r in FE_ROLE) or any(r in text for r in FE_ROLE)
     has_non_fe_role = any(r in tl for r in NON_FE_ROLE)
+    # the first line, WHEN it names a role, is authoritative: "Java Developer – Front End (Angular)"
+    # is a Java role, not a front-end one. Drop if the headline names a non-FE role and no FE role.
+    title = j.get("title", "")
+    title_l = title.lower()
+    title_fe = any(r in title_l for r in FE_ROLE) or any(r in title for r in FE_ROLE)
+    if any(r in title_l for r in NON_FE_ROLE) and not title_fe:
+        return False
     # --- hard drops that apply to EVERY post, judged on the whole body ---
     if US_STAFFING_RE.search(text):              # C2C / W2 / OPT / USC / GC / EAD — work-auth gated
         return False
