@@ -274,9 +274,8 @@ def relevant_post(j, cfg):
     title_fe = any(r in title_l for r in FE_ROLE) or any(r in title for r in FE_ROLE)
     if any(r in title_l for r in NON_FE_ROLE) and not title_fe:
         return False
-    # --- hard drops that apply to EVERY post, judged on the whole body ---
-    if US_STAFFING_RE.search(text):              # C2C / W2 / OPT / USC / GC / EAD — work-auth gated
-        return False
+    # NOTE: US bench-sales (C2C/W2/OPT/USC/GC/EAD) is NOT excluded — Ahmed wants posts worldwide.
+    # It's ranked DOWN in score_post instead (same "rank, never exclude" rule as far-tz jobs).
     if any(x in tl for x in cfg["profile"].get("exclude_terms", [])) and not has_fe_role:
         return False                             # junior/intern blast (unless explicitly an FE role)
     if has_non_fe_role and not has_fe_role:      # advertised role is backend/full-stack/data/etc.
@@ -313,13 +312,16 @@ def score_post(j, cfg):
         s += 5
     if "remote" in t or "عن بعد" in text:
         s += 4
-    blast = (1 if JAVA_RE.search(t) else 0) + sum(
-        1 for o in [".net", "dotnet", "react", "python", " php", "devops", "salesforce", " sap"] if o in t)
-    if blast >= 2:
-        s -= 18                          # generic multi-tech staffing blast, not Angular-focused
+    tz_delta, tz_label = timezone_fit(j)     # same work-life-balance rule as jobs — rank, never exclude
+    s += tz_delta
+    if US_STAFFING_RE.search(text):          # US C2C/W2/visa-gated bench post — keep but sink it
+        s -= 20
+    if blast_count(t) >= 2:
+        s -= 18                              # generic multi-tech staffing blast, not Angular-focused
     matched = [sk for sk in cfg["profile"]["skills"] if sk.lower() in t][:6]
-    label = {"egypt": "📣🇪🇬 Egyptian hiring post",
-             "gulf": "📣🕌 MENA hiring post"}.get(reg, "📣🌍 hiring post")
+    base = {"egypt": "📣🇪🇬 Egyptian hiring post",
+            "gulf": "📣🕌 MENA hiring post"}.get(reg, "📣🌍 hiring post")
+    label = f"{base} · {tz_label}" if tz_label else base
     return max(0, min(100, s)), (matched or ["Angular"]), label, reg
 
 def pick_cv(j):
