@@ -185,11 +185,55 @@ def show_tz():
     for s, label, loc, d in sorted(rows, reverse=True):
         print(f"  {s:>3}  {label:<16} {loc:<26} {d}")
 
+# ---- AI-training / data-labeling gigs (down-ranked to the bottom, never built-Angular) ----
+AI_GIGS = [
+    J("Angular Developer", desc="micro1 is the leading AI data lab. Help train next-generation AI systems and guide model learning. RxJS, SCSS."),
+    J("Senior Angular Engineer", desc="Mercor: critique code and provide feedback to train frontier models. No prior experience in AI is required."),
+    J("Frontend Developer", desc="Join Outlier AI to evaluate AI agents and improve how models learn. RLHF, data annotation."),
+]
+NOT_AI_GIGS = [
+    J("Angular Developer", desc="Build our SaaS analytics dashboard in Angular 17, RxJS, NgRx. Ship to production."),
+    J("Frontend Angular Developer", desc="We're an AI startup; build the Angular frontend for our ML product and ship features to users."),
+]
+
+# ---- employment type: contract / part_time / full_time (fallback full_time) ----
+EMPLOYMENT = [
+    (J("Angular Developer", desc="6-month contract, outside IR35, day rate negotiable."), "contract"),
+    (J("Angular Developer (Contract)", desc="United Kingdom. 4+ years building production Angular."), "contract"),
+    (J("Angular Developer", tags=["Contract"], desc="Build SPAs with Angular."), "contract"),
+    (J("Part-Time Angular Developer", desc="20 hours/week, flexible."), "part_time"),
+    (J("Angular Developer", desc="Permanent, full-time role with benefits."), "full_time"),
+    (J("Angular Developer", desc="Join our team building Angular apps."), "full_time"),  # unclear -> fallback
+    (J("Angular Developer", desc="Permanent contract of employment, full benefits."), "full_time"),
+]
+
+def show_ai_gig():
+    print(f"\n{'='*72}\n  AI-EVAL GIG DETECTION (these get sunk to the bottom)\n{'='*72}")
+    ok = 0
+    for j in AI_GIGS:
+        hit = score.is_ai_eval_gig(j); ok += hit
+        s, _, _ = score.score(j, cfg)
+        print(f"  {'✅' if hit else '⚠️ '} gig={hit!s:<5} score={s:<3} {j['title']}")
+    for j in NOT_AI_GIGS:
+        hit = score.is_ai_eval_gig(j); ok += (not hit)
+        print(f"  {'✅' if not hit else '⚠️ '} gig={hit!s:<5}         {j['title']} — real build role")
+    print(f"  AI-gig summary: {ok}/{len(AI_GIGS)+len(NOT_AI_GIGS)} classified correctly.")
+
+def show_employment():
+    print(f"\n{'='*72}\n  EMPLOYMENT TYPE (contract / part-time / full-time; unclear -> full-time)\n{'='*72}")
+    ok = 0
+    for j, want in EMPLOYMENT:
+        got = score.employment_type(j); ok += (got == want)
+        print(f"  {'✅' if got==want else '⚠️ '} {got:<10} (want {want:<10}) {j['title']}")
+    print(f"  Employment summary: {ok}/{len(EMPLOYMENT)} classified correctly.")
+
 if __name__ == "__main__":
     show("SHOULD SELECT (25)", SELECT)
     show("SHOULD DROP (25)", DROP)
     show_tz()
     show_posts()
+    show_ai_gig()
+    show_employment()
     bad_keep = sum(1 for j in DROP if score.relevant(j, cfg))
     bad_drop = sum(1 for j in SELECT if not score.relevant(j, cfg))
     print(f"\nSummary: {len(SELECT)-bad_drop}/{len(SELECT)} kept correctly, "

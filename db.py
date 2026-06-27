@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     title TEXT, company TEXT, location TEXT, url TEXT,
     source TEXT, market TEXT, remote TEXT,
     score INTEGER, cv TEXT, pitch TEXT, matched TEXT, posted REAL,
+    employment TEXT DEFAULT 'full_time',
     status TEXT DEFAULT 'new',
     first_seen REAL, last_seen REAL
 );
@@ -22,6 +23,9 @@ def conn():
 def init():
     with conn() as c:
         c.executescript(SCHEMA)
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(jobs)")}
+        if "employment" not in cols:                      # migrate older DBs
+            c.execute("ALTER TABLE jobs ADD COLUMN employment TEXT DEFAULT 'full_time'")
 
 def exists(c, job_id):
     return c.execute("SELECT 1 FROM jobs WHERE id=?", (job_id,)).fetchone() is not None
@@ -30,11 +34,12 @@ def insert_job(c, j):
     now = time.time()
     c.execute(
         """INSERT OR IGNORE INTO jobs
-           (id,title,company,location,url,source,market,remote,score,cv,pitch,matched,posted,status,first_seen,last_seen)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'new',?,?)""",
+           (id,title,company,location,url,source,market,remote,score,cv,pitch,matched,posted,employment,status,first_seen,last_seen)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'new',?,?)""",
         (j["id"], j["title"], j["company"], j["location"], j["url"], j["source"],
          j["market"], j["remote"], j["score"], j["cv"], j["pitch"],
-         ",".join(j.get("matched", [])), j.get("posted"), now, now),
+         ",".join(j.get("matched", [])), j.get("posted"),
+         j.get("employment", "full_time"), now, now),
     )
 
 def set_status(job_id, status):

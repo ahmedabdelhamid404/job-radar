@@ -144,9 +144,12 @@ def process(cfg, raw):
                     continue
                 s, matched, plabel, reg = score.score_post(j, cfg)
                 cv = {"egypt": "Egypt", "gulf": "Gulf"}.get(reg, "International")
+                emp = score.employment_type(j)
+                emp_lbl = score.EMP_LABEL.get(emp, "")
                 j2 = {**j, "score": s, "cv": cv, "matched": matched, "market": "📣 post",
-                      "remote": "remote" if score.is_remote(j) else "",
-                      "pitch": f"{plabel} · reach the poster directly. Matches {', '.join(matched[:4])}."}
+                      "remote": "remote" if score.is_remote(j) else "", "employment": emp,
+                      "pitch": f"{plabel}{' · ' + emp_lbl if emp_lbl else ''} · reach the poster directly. "
+                               f"Matches {', '.join(matched[:4])}."}
                 db.insert_job(c, j2)
                 new.append(j2)
                 continue
@@ -161,10 +164,12 @@ def process(cfg, raw):
             s, matched, tr = score.score(j, cfg)
             cv = score.pick_cv(j)
             remote = "remote" if score.is_remote(j) else ("hybrid" if score.is_hybrid(j) else "")
+            emp = score.employment_type(j)
+            ai = score.is_ai_eval_gig(j)
             j2 = {**j, "score": s, "cv": cv, "matched": matched,
-                  "market": score.market_of(j), "remote": remote,
+                  "market": score.market_of(j), "remote": remote, "employment": emp,
                   "pitch": score.pitch(j, matched, cv, score.TIER_LABEL.get(tr, ""),
-                                       score.timezone_fit(j)[1])}
+                                       score.timezone_fit(j)[1], ai, score.EMP_LABEL.get(emp, ""))}
             db.insert_job(c, j2)
             new.append(j2)
     new.sort(key=lambda x: (x["score"], x.get("posted") or 0), reverse=True)
@@ -189,6 +194,10 @@ def notify(cfg, new):
     for i, j in enumerate(new[:cap], 1):
         title = html.escape(j["title"] or "")
         meta = f"{html.escape(j['company'] or '—')} · {j['score']}% · {html.escape(j['cv'])} CV · {html.escape(j['market'])}"
+        flags = " · ".join(x for x in [score.EMP_LABEL.get(j.get("employment", "full_time"), ""),
+                                       "🤖 AI-eval gig" if score.is_ai_eval_gig(j) else ""] if x)
+        if flags:
+            meta += f" · {flags}"
         age = _age(j.get("posted"))
         if age:
             meta += f" · 🕒 {age}"
@@ -234,7 +243,11 @@ def notify_posts(cfg, posts):
     for j in posts:
         text = j.get("description") or ""
         emails, phones = _contacts(text)
-        parts = [f"📣 <b>{j['score']}</b> — {html.escape(j.get('company') or 'LinkedIn member')}"]
+        emp_lbl = score.EMP_LABEL.get(j.get("employment", "full_time"), "")
+        head_line = f"📣 <b>{j['score']}</b> — {html.escape(j.get('company') or 'LinkedIn member')}"
+        if emp_lbl:
+            head_line += f" · {emp_lbl}"
+        parts = [head_line]
         if j.get("author_url"):
             parts.append(f"👤 <a href=\"{html.escape(j['author_url'], quote=True)}\">profile</a>")
         if j.get("url"):

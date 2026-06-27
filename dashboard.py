@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from flask import Flask, render_template, request, redirect
 from pathlib import Path
-import yaml, db, time, threading, radar
+import yaml, db, time, threading, radar, score
 
 ROOT = Path(__file__).parent
 app = Flask(__name__)
@@ -63,6 +63,8 @@ def index():
         j["claude_prompt"] = claude_prompt(j)
         j["matched_list"] = [m for m in (j.get("matched") or "").split(",") if m]
         j["age"] = age_str(j.get("posted"))
+        j["emp_label"] = score.EMP_LABEL.get(j.get("employment", "full_time"), "")
+        j["ai_gig"] = score.is_ai_eval_gig(j)
     scanning = _scan["running"]
     found = _scan["found"]
     if not scanning and found is not None:

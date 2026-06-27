@@ -117,6 +117,57 @@ SEEKER_NOISE = [
     "personal branding", "career coaching", "i help candidates", "i help engineers",
     "i help job", "generic keyword", "keyword searches", "tips to land", "land your dream",
 ]
+# AI-training / data-labeling gigs dressed as Angular jobs — you CRITIQUE code to train a model,
+# you never build production apps. Reachable but zero portfolio value -> sink to the bottom.
+AI_GIG_COMPANIES = ["micro1", "mercor", "remotasks", "dataannotation", "data annotation",
+                    "surge ai", "surgehq", "scale ai", "invisible technologies", "labelbox",
+                    "alignerr", "snorkel ai", "toloka", "telus international", "outlier ai",
+                    "handshake ai"]
+AI_GIG_DEFINITIVE = [
+    "ai data lab", "train ai", "training ai", "train next-generation ai", "train frontier",
+    "training frontier model", "frontier model", "frontier ai", "evaluate ai agent",
+    "evaluating ai agent", "guide model learning", "how models learn", "shape how models",
+    "rlhf", "reinforcement learning from human feedback", "ai training data",
+    "no prior experience in ai is required", "improve how ai", "data annotation",
+    "data labeling", "data labelling", "label training data", "human intelligence layer",
+]
+AI_GIG_SOFT = ["training data", "human feedback", "feedback loops", "evaluate ai",
+               "ai systems learn", "high-quality training", "annotate", "labeling tasks"]
+
+def is_ai_eval_gig(j):
+    """True for AI-training / data-annotation gigs (micro1/Mercor/Outlier-style) — reviewing code
+    to train models, not building apps. High-precision: known lab, a definitive phrase, or 2+ soft."""
+    blob = (f"{j.get('title','')} {j.get('company','')} {j.get('location','')} "
+            f"{j.get('description','')}").lower()
+    if any(co in blob for co in AI_GIG_COMPANIES):
+        return True
+    if any(p in blob for p in AI_GIG_DEFINITIVE):
+        return True
+    return sum(1 for p in AI_GIG_SOFT if p in blob) >= 2
+
+# --- employment type: flag contract / part-time / full-time (fallback full-time when unclear) ---
+EMP_CONTRACT_STRONG = re.compile(
+    r"\b(contractor|freelance(?:r)?|fixed[- ]term|day rate|ir35|c2c|corp[- ]to[- ]corp|"
+    r"1099|contract[- ]to[- ]hire|temporary)\b", re.I)
+EMP_CONTRACT_WEAK = re.compile(r"\bcontract\b", re.I)
+EMP_PART_RE = re.compile(r"\b(part[- ]time|parttime|p/t)\b", re.I)
+EMP_PERM_RE = re.compile(r"\b(permanent|full[- ]time|fulltime|perm)\b", re.I)
+EMP_LABEL = {"contract": "📄 Contract", "part_time": "⏳ Part-time", "full_time": "🗓️ Full-time"}
+
+def employment_type(j):
+    """contract | part_time | full_time. Reads title+tags+description (LinkedIn/Indeed put the type
+    in tags). 'permanent' beats a bare 'contract' word; nothing clear -> full_time (Ahmed's default)."""
+    blob = (f"{j.get('title','')} {' '.join(str(x) for x in (j.get('tags') or []))} "
+            f"{j.get('description','')}")
+    if EMP_CONTRACT_STRONG.search(blob):
+        return "contract"
+    if EMP_PART_RE.search(blob):
+        return "part_time"
+    if EMP_PERM_RE.search(blob):
+        return "full_time"
+    if EMP_CONTRACT_WEAK.search(blob):       # bare "contract" only when no permanent/part-time signal
+        return "contract"
+    return "full_time"                       # unclear -> full time
 
 def text_of(j):
     return f"{j['title']} {j['location']} {' '.join(j.get('tags') or [])} {j['description']}".lower()
@@ -234,7 +285,10 @@ def score(j, cfg):
         s -= 25
     if is_remote(j):
         s += 6
-    return max(0, min(100, s)), matched, tr
+    s = max(0, min(100, s))
+    if is_ai_eval_gig(j):
+        s = min(s, 15)                               # AI-training/data-labeling gig — sink to the bottom
+    return s, matched, tr
 
 def is_arabic(text):
     return bool(ARABIC_RE.search(text or ""))
@@ -318,11 +372,16 @@ def score_post(j, cfg):
         s -= 20
     if blast_count(t) >= 2:
         s -= 18                              # generic multi-tech staffing blast, not Angular-focused
+    s = max(0, min(100, s))
+    ai = is_ai_eval_gig(j)
+    if ai:
+        s = min(s, 15)                       # AI-training/data-labeling gig — sink to the bottom
     matched = [sk for sk in cfg["profile"]["skills"] if sk.lower() in t][:6]
     base = {"egypt": "📣🇪🇬 Egyptian hiring post",
             "gulf": "📣🕌 MENA hiring post"}.get(reg, "📣🌍 hiring post")
-    label = f"{base} · {tz_label}" if tz_label else base
-    return max(0, min(100, s)), (matched or ["Angular"]), label, reg
+    bits = [b for b in (("🤖 AI-eval gig" if ai else ""), base, tz_label) if b]
+    label = " · ".join(bits)
+    return s, (matched or ["Angular"]), label, reg
 
 def pick_cv(j):
     r = region(j)
@@ -331,8 +390,8 @@ def pick_cv(j):
 def market_of(j):
     return region(j) or "remote/intl"
 
-def pitch(j, matched, cv, tier_label="", tz_label=""):
+def pitch(j, matched, cv, tier_label="", tz_label="", ai_gig=False, emp_label=""):
     top = ", ".join(matched[:5]) if matched else "your Angular / front-end stack"
-    bits = [b for b in (tier_label, tz_label) if b]
+    bits = [b for b in (("🤖 AI-eval gig" if ai_gig else ""), emp_label, tier_label, tz_label) if b]
     lead = (" · ".join(bits) + " · ") if bits else ""
     return f"{lead}Matches {top}. Recommended CV: {cv}."
