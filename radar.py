@@ -146,8 +146,9 @@ def process(cfg, raw):
                 cv = {"egypt": "Egypt", "gulf": "Gulf"}.get(reg, "International")
                 emp = score.employment_type(j)
                 emp_lbl = score.EMP_LABEL.get(emp, "")
+                rk = score.reachability(j)
                 j2 = {**j, "score": s, "cv": cv, "matched": matched, "market": "📣 post",
-                      "remote": "remote" if score.is_remote(j) else "", "employment": emp,
+                      "remote": "remote" if score.is_remote(j) else "", "employment": emp, "reach": rk,
                       "pitch": f"{plabel}{' · ' + emp_lbl if emp_lbl else ''} · reach the poster directly. "
                                f"Matches {', '.join(matched[:4])}."}
                 db.insert_job(c, j2)
@@ -166,10 +167,12 @@ def process(cfg, raw):
             remote = "remote" if score.is_remote(j) else ("hybrid" if score.is_hybrid(j) else "")
             emp = score.employment_type(j)
             ai = score.is_ai_eval_gig(j)
+            rk = score.reachability(j)
             j2 = {**j, "score": s, "cv": cv, "matched": matched,
-                  "market": score.market_of(j), "remote": remote, "employment": emp,
+                  "market": score.market_of(j), "remote": remote, "employment": emp, "reach": rk,
                   "pitch": score.pitch(j, matched, cv, score.TIER_LABEL.get(tr, ""),
-                                       score.timezone_fit(j)[1], ai, score.EMP_LABEL.get(emp, ""))}
+                                       score.timezone_fit(j)[1], ai, score.EMP_LABEL.get(emp, ""),
+                                       score.REACH_LABEL.get(rk, ""))}
             db.insert_job(c, j2)
             new.append(j2)
     new.sort(key=lambda x: (x["score"], x.get("posted") or 0), reverse=True)
@@ -194,7 +197,8 @@ def notify(cfg, new):
     for i, j in enumerate(new[:cap], 1):
         title = html.escape(j["title"] or "")
         meta = f"{html.escape(j['company'] or '—')} · {j['score']}% · {html.escape(j['cv'])} CV · {html.escape(j['market'])}"
-        flags = " · ".join(x for x in [score.EMP_LABEL.get(j.get("employment", "full_time"), ""),
+        flags = " · ".join(x for x in [score.REACH_LABEL.get(j.get("reach", ""), ""),
+                                       score.EMP_LABEL.get(j.get("employment", "full_time"), ""),
                                        "🤖 AI-eval gig" if score.is_ai_eval_gig(j) else ""] if x)
         if flags:
             meta += f" · {flags}"

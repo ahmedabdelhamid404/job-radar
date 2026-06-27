@@ -65,6 +65,7 @@ def index():
         j["age"] = age_str(j.get("posted"))
         j["emp_label"] = score.EMP_LABEL.get(j.get("employment", "full_time"), "")
         j["ai_gig"] = score.is_ai_eval_gig(j)
+        j["reach_label"] = score.REACH_LABEL.get(j.get("reach", ""), "")
     scanning = _scan["running"]
     found = _scan["found"]
     if not scanning and found is not None:

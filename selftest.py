@@ -219,6 +219,32 @@ def show_ai_gig():
         print(f"  {'✅' if not hit else '⚠️ '} gig={hit!s:<5}         {j['title']} — real build role")
     print(f"  AI-gig summary: {ok}/{len(AI_GIGS)+len(NOT_AI_GIGS)} classified correctly.")
 
+# ---- reachability from Egypt (flag only on real evidence; neutral when silent) ----
+REACHABILITY = [
+    (J("Senior Front End Angular Engineer", loc="United States",
+       desc="Fully remote. BigBear.ai builds AI decision-intelligence for national security. McLean, Virginia. Equal opportunity, protected veterans. Angular v17+, RxJS, signals."), "locked"),
+    (J("Angular Developer", loc="United Kingdom",
+       desc="Contract. Production Angular SPAs. 4+ years. RxJS, AG Grid, REST."), "soft"),
+    (J("Senior Frontend Developer Angular", loc="Remote",
+       desc="100% remotely from anywhere in Germany. Angular, TypeScript, NgRx. Berlin office optional."), "locked"),
+    (J("Angular Developer", loc="Remote",
+       desc="We hire worldwide and work from anywhere. Contractors welcome via Deel. Angular, RxJS."), "global"),
+    (J("Angular Developer", loc="Remote",
+       desc="Join our team building Angular apps. RxJS, NgRx, SCSS."), ""),  # silent -> neutral
+    (J("Angular Developer", loc="Remote - Egypt",
+       desc="Cairo-based hybrid. Angular, TypeScript."), ""),               # home market -> neutral
+]
+
+def show_reachability():
+    print(f"\n{'='*72}\n  REACHABILITY FROM EGYPT (flag only on evidence; silent -> neutral)\n{'='*72}")
+    ok = 0
+    for j, want in REACHABILITY:
+        got = score.reachability(j); ok += (got == want)
+        s, _, _ = score.score(j, cfg)
+        tag = score.REACH_LABEL.get(got, "—")
+        print(f"  {'✅' if got==want else '⚠️ '} {(got or 'neutral'):<8} score={s:<3} {tag:<18} {j['title'][:34]} @ {j['location']}")
+    print(f"  Reachability summary: {ok}/{len(REACHABILITY)} classified correctly.")
+
 def show_employment():
     print(f"\n{'='*72}\n  EMPLOYMENT TYPE (contract / part-time / full-time; unclear -> full-time)\n{'='*72}")
     ok = 0
@@ -234,6 +260,7 @@ if __name__ == "__main__":
     show_posts()
     show_ai_gig()
     show_employment()
+    show_reachability()
     bad_keep = sum(1 for j in DROP if score.relevant(j, cfg))
     bad_drop = sum(1 for j in SELECT if not score.relevant(j, cfg))
     print(f"\nSummary: {len(SELECT)-bad_drop}/{len(SELECT)} kept correctly, "

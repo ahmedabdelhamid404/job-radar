@@ -169,6 +169,55 @@ def employment_type(j):
         return "contract"
     return "full_time"                       # unclear -> full time
 
+# --- reachability from Egypt: can Ahmed actually take it without relocating? Best-effort: the real
+# work-auth rule usually lives on the ATS behind "Apply", not in the JD, so flag ONLY on real
+# evidence and stay NEUTRAL when the text is silent (never falsely mark a reachable job as locked). ---
+GLOBAL_FRIENDLY = ["work from anywhere", "anywhere in the world", "from any country",
+                   "any country in the world", "globally remote", "global remote",
+                   "remote worldwide", "worldwide remote", "fully distributed", "hiring worldwide",
+                   "work from any location", "international applicants", "contractors welcome",
+                   "open to contractors", "independent contractor", "via deel", "we use deel",
+                   "employer of record", " eor ", "no matter where you live",
+                   "no matter where you are", "timezone agnostic", "work from any timezone"]
+LOCKED_EXPLICIT = ["authorized to work in", "must be authorized to work", "us citizen",
+                   "u.s. citizen", "citizens only", "green card", "us person", "u.s. person",
+                   "must reside in", "must be located in", "must be based in", "right to work in",
+                   "eligible to work in", "valid work authorization", "work authorization in",
+                   "no visa sponsorship", "not able to sponsor", "unable to sponsor",
+                   "cannot sponsor", "without sponsorship", "remote within", "us-based only",
+                   "security clearance", "active clearance", "ts/sci", "secret clearance",
+                   "obtain a clearance", "itar", "legally authorized", "work permit"]
+DEFENSE_GOV = ["national security", "defense contractor", "department of defense", " dod ",
+               "intelligence community", "mission-based operating", "government contract",
+               "federal contract", "public trust clearance"]
+_COUNTRY_ALT = (r"(?:u\.?s\.?a?|united states|united kingdom|uk|england|scotland|wales|germany|"
+                r"deutschland|canada|australia|netherlands|france|ireland|switzerland|sweden|norway|"
+                r"denmark|finland|spain|italy|portugal|poland|belgium|austria|czech|romania|"
+                r"singapore|new zealand|japan|south korea|india|mexico|brazil|argentina)")
+FAR_COUNTRY_RE = re.compile(r"\b" + _COUNTRY_ALT + r"\b", re.I)              # location names a far country
+# "remote from anywhere in Germany" / "within the US" / "based in the UK" — country bound, in the body
+LOCKED_GEO_RE = re.compile(
+    r"\b(?:anywhere in|within|based in|located in|reside in|residing in|remote (?:from|in|within))"
+    r"\s+(?:the\s+)?" + _COUNTRY_ALT + r"\b", re.I)
+REACH_LABEL = {"global": "✅ global-remote", "locked": "🌐 country-locked",
+               "soft": "🌐 verify location"}
+
+def reachability(j):
+    """'global' = explicitly worldwide/contractor-friendly; 'locked' = needs local work rights
+    (citizenship/clearance/defense, 'remote within <country>', no sponsorship); 'soft' = location
+    names a far country with no global wording (verify on the company site — often hidden there);
+    '' = unknown -> stay neutral. NOTE: best-effort; LinkedIn JDs usually omit the real work-auth rule."""
+    blob = (f"{j.get('title','')} {j.get('location','')} "
+            f"{' '.join(str(x) for x in (j.get('tags') or []))} {j.get('description','')}").lower()
+    if (any(p in blob for p in LOCKED_EXPLICIT) or any(p in blob for p in DEFENSE_GOV)
+            or LOCKED_GEO_RE.search(blob)):
+        return "locked"
+    if any(p in blob for p in GLOBAL_FRIENDLY):
+        return "global"
+    if FAR_COUNTRY_RE.search(j.get("location") or ""):   # location bound to a specific far country
+        return "soft"
+    return ""
+
 def text_of(j):
     return f"{j['title']} {j['location']} {' '.join(j.get('tags') or [])} {j['description']}".lower()
 
@@ -285,9 +334,16 @@ def score(j, cfg):
         s -= 25
     if is_remote(j):
         s += 6
+    rk = reachability(j)
+    if rk == "global":
+        s += 8                                       # explicitly worldwide / contractor-friendly
+    elif rk == "soft":
+        s -= 12                                      # location-bound to a far country (verify)
     s = max(0, min(100, s))
     if is_ai_eval_gig(j):
         s = min(s, 15)                               # AI-training/data-labeling gig — sink to the bottom
+    if rk == "locked":
+        s = min(s, 18)                               # needs local work rights — sink, never exclude
     return s, matched, tr
 
 def is_arabic(text):
@@ -372,14 +428,21 @@ def score_post(j, cfg):
         s -= 20
     if blast_count(t) >= 2:
         s -= 18                              # generic multi-tech staffing blast, not Angular-focused
+    rk = reachability(j)
+    if rk == "global":
+        s += 8
+    elif rk == "soft":
+        s -= 12
     s = max(0, min(100, s))
     ai = is_ai_eval_gig(j)
     if ai:
         s = min(s, 15)                       # AI-training/data-labeling gig — sink to the bottom
+    if rk == "locked":
+        s = min(s, 18)                       # needs local work rights — sink, never exclude
     matched = [sk for sk in cfg["profile"]["skills"] if sk.lower() in t][:6]
     base = {"egypt": "📣🇪🇬 Egyptian hiring post",
             "gulf": "📣🕌 MENA hiring post"}.get(reg, "📣🌍 hiring post")
-    bits = [b for b in (("🤖 AI-eval gig" if ai else ""), base, tz_label) if b]
+    bits = [b for b in (("🤖 AI-eval gig" if ai else ""), REACH_LABEL.get(rk, ""), base, tz_label) if b]
     label = " · ".join(bits)
     return s, (matched or ["Angular"]), label, reg
 
@@ -390,8 +453,9 @@ def pick_cv(j):
 def market_of(j):
     return region(j) or "remote/intl"
 
-def pitch(j, matched, cv, tier_label="", tz_label="", ai_gig=False, emp_label=""):
+def pitch(j, matched, cv, tier_label="", tz_label="", ai_gig=False, emp_label="", reach_label=""):
     top = ", ".join(matched[:5]) if matched else "your Angular / front-end stack"
-    bits = [b for b in (("🤖 AI-eval gig" if ai_gig else ""), emp_label, tier_label, tz_label) if b]
+    bits = [b for b in (("🤖 AI-eval gig" if ai_gig else ""), reach_label, emp_label,
+                        tier_label, tz_label) if b]
     lead = (" · ".join(bits) + " · ") if bits else ""
     return f"{lead}Matches {top}. Recommended CV: {cv}."

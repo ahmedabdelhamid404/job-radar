@@ -60,6 +60,9 @@
   .tag.emp.contract{background:#fde7c8;color:#8a5a00;font-weight:600;}
   .tag.emp.part_time{background:#f7e0e0;color:#8a2b2b;font-weight:600;}
   .tag.aigig{background:#e6e1f5;color:#5b3b8a;font-weight:600;}
+  .tag.reach.locked{background:#f6d7d7;color:#9a2222;font-weight:600;}
+  .tag.reach.soft{background:#fbe7cf;color:#8a5a00;font-weight:600;}
+  .tag.reach.global{background:#d6efdc;color:#1f7a44;font-weight:600;}
   .pitch{font-size:12.5px;color:var(--muted);margin-bottom:9px;}
   .actions{display:flex;gap:7px;flex-wrap:wrap;align-items:center;}
   .actions a,.actions button{font-size:12.5px;font-weight:600;border-radius:7px;padding:6px 11px;
@@ -128,6 +131,7 @@
         <div class="co">{{ j.company or '—' }}{% if j.location %} · {{ j.location }}{% endif %}</div>
         <div class="tags">
           <span class="tag cv">{{ j.cv }} CV</span>
+          {% if j.reach_label %}<span class="tag reach {{ j.reach }}">{{ j.reach_label }}</span>{% endif %}
           {% if j.emp_label %}<span class="tag emp {{ j.employment }}">{{ j.emp_label }}</span>{% endif %}
           {% if j.ai_gig %}<span class="tag aigig">🤖 AI-eval gig</span>{% endif %}
           {% if j.remote %}<span class="tag">{{ j.remote }}</span>{% endif %}
